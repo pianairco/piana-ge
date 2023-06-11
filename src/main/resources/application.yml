@@ -1,0 +1,8 @@
+manager:
+  renderer: 'T6RenderUnit'
+display:
+  window:
+    size:
+      width: 480
+      height: 360
+    title: 'piana game engine'
