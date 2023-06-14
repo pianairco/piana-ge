@@ -66,7 +66,8 @@ public class T6RenderUnit extends BaseRenderUnit {
         }).addShaderProgram(
                 shaderProgramId
         ).addTexture(
-                Texture.loadTexture("/home/rahmati/projects/piana-gl/src/main/resources/res/texture-2.jpeg")
+                Texture.loadTexture("classpath-/models/sky.jpg")
+//                Texture.loadTexture("/home/rahmati/projects/piana-gl/src/main/resources/res/texture-2.jpeg")
         ).addTextureCoordinates(new float[] {
                 0.0f, 0.0f,
                 1.0f, 0.0f,
@@ -87,7 +88,8 @@ public class T6RenderUnit extends BaseRenderUnit {
         }).addShaderProgram(
                 shaderProgramId
         ).addTexture(
-                Texture.loadTexture("/home/rahmati/projects/piana-gl/src/main/resources/res/texture-2.jpeg")
+                Texture.loadTexture("classpath-/models/sky.jpg")
+//                Texture.loadTexture("/home/rahmati/projects/piana-gl/src/main/resources/res/texture-2.jpeg")
         ).addTextureCoordinates(new float[] {
                 0.0f, 0.0f,
                 1.0f, 0.0f,

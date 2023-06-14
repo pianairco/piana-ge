@@ -1,11 +1,19 @@
 package ir.piana.dev.gl.util;
 
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.InputStream;
+import java.io.Serializable;
+import java.net.URI;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.nio.channels.Channel;
+import java.nio.channels.ReadableByteChannel;
 import java.util.HashMap;
 
+import ir.piana.dev.gl.toolkit.CMS3DModelLoader;
+import org.apache.commons.io.FileUtils;
 import org.lwjgl.opengl.*;
 import org.lwjgl.stb.STBImage;
 import org.lwjgl.system.MemoryStack;
@@ -27,14 +35,29 @@ public class Texture {
             IntBuffer h = stack.mallocInt(1);
             IntBuffer channels = stack.mallocInt(1);
 
-            String absolutePath = new File(texture).getPath().substring(1);
-            if (!System.getProperty("os.name").contains("Windows")) { // TODO Language/region agnostic value for 'Windows' ?
+            URL url = texture.startsWith("classpath-") ?
+                    CMS3DModelLoader.class.getResource(
+                            texture.substring(10).trim()) :
+                    new URL(texture);
+            /*InputStream inputStream = texture.startsWith("classpath-") ?
+                    CMS3DModelLoader.class.getResourceAsStream(
+                            texture.substring(10).trim()) :
+                    new ByteArrayInputStream(FileUtils.readFileToByteArray(new File(texture)));
+
+            ByteBuffer byteBuffer = ByteBuffer.allocate(inputStream.available());
+            if (inputStream.available() > 0) {
+                byteBuffer.put(inputStream.readNBytes(inputStream.available()));
+            }*/
+
+            /*String absolutePath = new File(texture.startsWith("classpath-") ? texture.substring(10) : texture)
+                    .getPath().substring(1);*/
+            /*if (!System.getProperty("os.name").contains("Windows")) { // TODO Language/region agnostic value for 'Windows' ?
                 // stbi_load requires a file system path, NOT a classpath resource path
                 absolutePath = File.separator + absolutePath;
-            }
+            }*/
 
-            File file = new File(texture);
-            buffer = STBImage.stbi_load(file.toPath().toString(), w, h, channels, 4);
+            buffer = STBImage.stbi_load(url.toString().substring(6) , w, h, channels, 4);
+//            buffer = STBImage.stbi_load_from_memory(byteBuffer, w, h, channels, 4);
             if (buffer == null) {
                 throw new Exception("Can't load file " + texture + " " + STBImage.stbi_failure_reason());
             }

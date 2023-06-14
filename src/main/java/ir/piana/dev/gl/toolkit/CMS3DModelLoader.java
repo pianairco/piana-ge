@@ -1,11 +1,15 @@
 package ir.piana.dev.gl.toolkit;
 
 import org.apache.commons.io.FileUtils;
+import org.lwjgl.system.MemoryStack;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.IntBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -169,58 +173,67 @@ public class CMS3DModelLoader {
         int startOfAnimation = 0;
         int startOfJoints = 0;
 
-        InputStream resourceAsStream = CMS3DModelLoader.class.getResourceAsStream(
+        /*InputStream resourceAsStream = CMS3DModelLoader.class.getResourceAsStream(
                 filename.substring(10).trim());
         int available = resourceAsStream.available();
         byte[] bytes =  resourceAsStream.readNBytes(10);
         if(!IsCorrectID(new String(bytes))) {
             System.out.println("file is incorrect!");
-        }
+        }*/
 
-        try (ByteArrayInputStream bais = (filename.startsWith("classpath-") ?
+        try (MemoryStack stack = MemoryStack.stackPush();
+             ByteArrayInputStream bais = (filename.startsWith("classpath-") ?
                 new ByteArrayInputStream(CMS3DModelLoader.class.getResourceAsStream(
-                        filename.substring(10).trim()).toString().getBytes()) :
+                        filename.substring(10).trim()).readAllBytes()) :
                 new ByteArrayInputStream(FileUtils.readFileToByteArray(new File(filename))))) {
-            bytes = bais.readNBytes(10);
+            byte[] bytes = bais.readNBytes(10);
             if(!IsCorrectID(new String(bytes))) {
                 System.out.println("file is incorrect!");
                 throw new Exception("error occurred!");
+            }
+
+            int[] versionBuffer = new int[1];
+            ByteBuffer.wrap(bais.readNBytes(4)).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(versionBuffer);
+            int version = versionBuffer[0];
+            if (!IsCorrectVersion(version)) {
+                System.out.println("file is incorrect!");
+                throw new Exception("error occurred!");
+            }
+
+            ModelClear();
+
+            //----------------------------------
+            //--------------number of vertices
+            //----------------------------------
+
+            char[] numVerticesBuffer = new char[1];
+            ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(numVerticesBuffer);
+            char numVertices = numVerticesBuffer[0];
+            if (numVertices > 0) {
+                isVertex = true;
+            }
+
+            model_vertices = new ArrayList<>(numVertices);
+
+            for (int i = 0; i < numVertices; i++) {
+
+                byte flags = bais.readNBytes(1)[0];
+
+                float[] vertex = new float[3];
+                ByteBuffer.wrap(bais.readNBytes(12)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(vertex);
+
+                byte boneId = bais.readNBytes(1)[0];
+                byte referenceCount = bais.readNBytes(1)[0];
+
+                model_vertices.add(new ms3d_vertex(flags, vertex, boneId, referenceCount));
             }
         } catch (Exception e) {
             return false;
         }
 
-        //----------------------------------
-        //--------------test Id
-        //----------------------------------
 /*
-        //----------------------------------
-        //--------------test version
-        //----------------------------------
 
-        int version;
-        fread( & version, sizeof( int),1, fp);
-        if (!IsCorrectVersion(version)) {
-            fclose(fp);
-            return false;
-        }
 
-        ModelClear();
-
-        int sizeOfHeader = (10 * sizeof( char))+sizeof( int);
-        startOfVertecis = sizeOfHeader;
-
-        //----------------------------------
-        //--------------number of vertices
-        //----------------------------------
-
-        pos = startOfVertecis;
-        fsetpos(fp, & pos);
-
-        fread( & numVertices, sizeof(unsigned short),1, fp);
-        if (numVertices > 0) {
-            isVertex = true;
-        }
         model_vertices.resize(numVertices);
 
         for (int i = 0; i < numVertices; i++) {
@@ -1145,18 +1158,25 @@ public class CMS3DModelLoader {
 }
 
 class ms3d_vertex {
-    char flags;
+    byte flags;
     float vertex[] = new float[3];
     //-----------------------------------
     //-- index of joints in milkshape
     //-----------------------------------
-    char boneId;
-    char referenceCount;
+    byte boneId;
+    byte referenceCount;
 
-    char boneIds[] = new char[3];
-    char weights[] = new char[3];
+    byte[] boneIds = new byte[3];
+    byte[] weights = new byte[3];
     int extra;
     float renderColor[] = new float[3];
+
+    public ms3d_vertex(byte flags, float[] vertex, byte boneId, byte referenceCount) {
+        this.flags = flags;
+        this.vertex = vertex;
+        this.boneId = boneId;
+        this.referenceCount = referenceCount;
+    }
 };
 
 class ms3d_triangle {
@@ -1166,29 +1186,29 @@ class ms3d_triangle {
     float s[] = new float[3];
     float t[] = new float[3];
     float normal[] = new float[3];
-    char smoothingGroup;
-    char groupIndex;
+    byte smoothingGroup;
+    byte groupIndex;
 };
 
 class ms3d_group {
-    char flags;
-    char name[] = new char[32];
+    byte flags;
+    byte[] name = new byte[32];
     List<Short> triangleIndices;
-    char materialIndex;
+    byte materialIndex;
     List<Character> comment;
 };
 
 class ms3d_material {
-    char name[] = new char[32];
+    byte name[] = new byte[32];
     float ambient[] = new float[4];
     float diffuse[] = new float[4];
     float specular[] = new float[4];
     float emissive[] = new float[4];
     float shininess;
     float transparency;
-    char mode;
-    char texture[] = new char[CMS3DModelLoader.MAX_TEXTURE_FILENAME_SIZE];
-    char alphamap[] = new char[CMS3DModelLoader.MAX_TEXTURE_FILENAME_SIZE];
+    byte mode;
+    byte texture[] = new byte[CMS3DModelLoader.MAX_TEXTURE_FILENAME_SIZE];
+    byte alphamap[] = new byte[CMS3DModelLoader.MAX_TEXTURE_FILENAME_SIZE];
     int id;
     List<Character> comment;
 };
@@ -1204,9 +1224,9 @@ class ms3d_tangent {
 };
 
 class ms3d_joint {
-    char flags;
-    char name[] = new char[32];
-    char parentName[] = new char[32];
+    byte flags;
+    byte name[] = new byte[32];
+    byte parentName[] = new byte[32];
 
     float rot[] = new float[3];
     float pos[] = new float[3];
