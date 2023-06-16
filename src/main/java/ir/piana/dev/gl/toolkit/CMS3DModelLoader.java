@@ -10,6 +10,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.IntBuffer;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -96,19 +97,19 @@ public class CMS3DModelLoader {
     //----
     //------------------------------------------------------
 
-    short numVertices;
-    short numTriangles;
-    short numIndices;
-    short numGroups;
+    char numVertices;
+    char numTriangles;
+    char numIndices;
+    char numGroups;
 
-    short[] numGroupTriangles;
-    int[] numGroupIndices;
+    char[] numGroupTriangles;
+    char[] numGroupIndices;
 
-    short numMaterials;
-    short numJoints;
+    char numMaterials;
+    char numJoints;
 
-    short numKeyFramesRot;
-    short numKeyFramesPos;
+    char numKeyFramesRot;
+    char numKeyFramesPos;
 
     //------------------------------------------------------
     //---- textures
@@ -165,6 +166,72 @@ public class CMS3DModelLoader {
         return true;
     }
 
+    public String readString(ByteArrayInputStream bais, int length) throws IOException {
+        return new String(bais.readNBytes(length), Charset.forName("ASCII"));
+    }
+
+    public byte[] readBytes(ByteArrayInputStream bais, int length) throws IOException {
+        return bais.readNBytes(length);
+    }
+
+    public byte readByte(ByteArrayInputStream bais) throws IOException {
+        return bais.readNBytes(1)[0];
+    }
+
+    public float readFloat(ByteArrayInputStream bais) throws IOException {
+        float[] floats = new float[1];
+        ByteBuffer.wrap(bais.readNBytes(4)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(floats);
+        return floats[0];
+    }
+
+    public float[] readFloats(ByteArrayInputStream bais, int length) throws IOException {
+        float[] floats = new float[length];
+        ByteBuffer.wrap(bais.readNBytes(length * 4)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(floats);
+        return floats;
+    }
+
+    public int readInt(ByteArrayInputStream bais) throws IOException {
+        int[] versionBuffer = new int[1];
+        ByteBuffer.wrap(bais.readNBytes(4)).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(versionBuffer);
+        return versionBuffer[0];
+    }
+
+    public int[] readInts(ByteArrayInputStream bais, int length) throws IOException {
+        int[] versionBuffer = new int[length];
+        ByteBuffer.wrap(bais.readNBytes(length * 4)).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(versionBuffer);
+        return versionBuffer;
+    }
+
+    public short readShort(ByteArrayInputStream bais) throws IOException {
+        short[] sizeBuffer = new short[1];
+        ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(sizeBuffer);
+        return sizeBuffer[0];
+    }
+
+    public short[] readShorts(ByteArrayInputStream bais, int length) throws IOException {
+        short[] sizeBuffer = new short[length];
+        ByteBuffer.wrap(bais.readNBytes(2 * length)).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(sizeBuffer);
+        return sizeBuffer;
+    }
+
+    public char readChar(ByteArrayInputStream bais) throws IOException {
+        char[] sizeBuffer = new char[1];
+        ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(sizeBuffer);
+        return sizeBuffer[0];
+    }
+
+    public char[] readChars(ByteArrayInputStream bais, int length) throws IOException {
+        char[] sizeBuffer = new char[length];
+        ByteBuffer.wrap(bais.readNBytes(2 * length)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(sizeBuffer);
+        return sizeBuffer;
+    }
+
+    public char readSize(ByteArrayInputStream bais) throws IOException {
+        char[] sizeBuffer = new char[1];
+        ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(sizeBuffer);
+        return sizeBuffer[0];
+    }
+
     public boolean initModel(String filename) throws IOException {
         int startOfVertices = 0;
         int startOfTriangles = 0;
@@ -186,15 +253,13 @@ public class CMS3DModelLoader {
                 new ByteArrayInputStream(CMS3DModelLoader.class.getResourceAsStream(
                         filename.substring(10).trim()).readAllBytes()) :
                 new ByteArrayInputStream(FileUtils.readFileToByteArray(new File(filename))))) {
-            byte[] bytes = bais.readNBytes(10);
+            byte[] bytes = readBytes(bais, 10);
             if(!IsCorrectID(new String(bytes))) {
                 System.out.println("file is incorrect!");
                 throw new Exception("error occurred!");
             }
 
-            int[] versionBuffer = new int[1];
-            ByteBuffer.wrap(bais.readNBytes(4)).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(versionBuffer);
-            int version = versionBuffer[0];
+            int version = readInt(bais);
             if (!IsCorrectVersion(version)) {
                 System.out.println("file is incorrect!");
                 throw new Exception("error occurred!");
@@ -206,9 +271,7 @@ public class CMS3DModelLoader {
             //--------------number of vertices
             //----------------------------------
 
-            char[] numVerticesBuffer = new char[1];
-            ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(numVerticesBuffer);
-            char numVertices = numVerticesBuffer[0];
+            numVertices = readChar(bais);
             if (numVertices > 0) {
                 isVertex = true;
             }
@@ -216,107 +279,98 @@ public class CMS3DModelLoader {
             model_vertices = new ArrayList<>(numVertices);
 
             for (int i = 0; i < numVertices; i++) {
-
-                byte flags = bais.readNBytes(1)[0];
-
-                float[] vertex = new float[3];
-                ByteBuffer.wrap(bais.readNBytes(12)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(vertex);
-
-                byte boneId = bais.readNBytes(1)[0];
-                byte referenceCount = bais.readNBytes(1)[0];
+                byte flags = readByte(bais);
+                float[] vertex = readFloats(bais, 3);
+                byte boneId = readByte(bais);
+                byte referenceCount = readByte(bais);
 
                 model_vertices.add(new ms3d_vertex(flags, vertex, boneId, referenceCount));
             }
+
+            numTriangles = readSize(bais);
+            if (numTriangles > 0) {
+                isTriangle = true;
+            }
+            model_triangles = new ArrayList<>(numTriangles);
+
+            for (int i = 0; i < numTriangles; i++) {
+
+                short flags = readShort(bais);
+                char[] vertexIndices = readChars(bais, 3);
+                float[] vertexNormals = readFloats(bais, 9);
+                float[] s = readFloats(bais, 3);
+                float[] t = readFloats(bais, 3);
+                byte smoothingGroup = readByte(bais);
+                byte groupIndex = readByte(bais);
+
+
+                model_triangles.add(new ms3d_triangle(
+                        flags, vertices_indices, vertexNormals, s, t, new float[3], smoothingGroup, groupIndex
+                ));
+                // TODO: calculate triangle normal
+            }
+
+            numGroups = readChar(bais);
+            if (numGroups > 0) {
+                isGroup = true;
+            }
+            model_groups = new ArrayList(numGroups);
+
+            numGroupTriangles = new char[numGroups];
+            numGroupIndices = new char[numGroups];
+
+            int numGT = 0;
+            for (int i = 0; i < numGroups; i++) {
+                byte flags = readByte(bais);
+                String name = readString(bais, 32);
+
+                numGroupTriangles[i] = readChar(bais);
+                numGroupIndices[i] = (char) (3 * numGroupTriangles[i]);
+
+                short[] triangleIndices = new short[numGroupTriangles[i]];
+                if (numGroupTriangles[i] > 0)
+                    triangleIndices = readShorts(bais, numGroupTriangles[i]);
+                numGT += numGroupTriangles[i];
+                byte materialIndex = readByte(bais);
+
+                model_groups.add(new ms3d_group(flags, name, triangleIndices, materialIndex, null));
+            }
+
+            numMaterials = readChar(bais);
+            if (numMaterials > 0) {
+                isMaterial = true;
+            }
+            model_materials = new ArrayList(numMaterials);
+
+            for (int i = 0; i < numMaterials; i++) {
+                /*fread(model_materials[i].name, sizeof( char),32, fp);
+                fread( & model_materials[i].ambient, sizeof( float),4, fp);
+                fread( & model_materials[i].diffuse, sizeof( float),4, fp);
+                fread( & model_materials[i].specular, sizeof( float),4, fp);
+                fread( & model_materials[i].emissive, sizeof( float),4, fp);
+                fread( & model_materials[i].shininess, sizeof( float),1, fp);
+                fread( & model_materials[i].transparency, sizeof( float),1, fp);
+                fread( & model_materials[i].mode, sizeof(unsigned char),1, fp);
+                fread(model_materials[i].texture, sizeof( char),MAX_TEXTURE_FILENAME_SIZE, fp);
+                fread(model_materials[i].alphamap, sizeof( char),MAX_TEXTURE_FILENAME_SIZE, fp);
+
+                // set alpha
+                model_materials[i].ambient[3] = model_materials[i].transparency;
+                model_materials[i].diffuse[3] = model_materials[i].transparency;
+                model_materials[i].specular[3] = model_materials[i].transparency;
+                model_materials[i].emissive[3] = model_materials[i].transparency;*/
+            }
+
+            System.out.println();
         } catch (Exception e) {
             return false;
         }
 
 /*
 
-
-        model_vertices.resize(numVertices);
-
-        for (int i = 0; i < numVertices; i++) {
-            fread( & model_vertices[i].flags, sizeof(unsigned char),1, fp);
-
-            float vertex[ 3];
-            fread(vertex, sizeof( float),3, fp);
-            fread( & model_vertices[i].boneId, sizeof( char),1, fp);
-            fread( & model_vertices[i].referenceCount, sizeof(unsigned char),1, fp);
-        }
-
-        int sizeOfVertices = sizeof(unsigned short)+(numVertices * ((sizeof( char) *3)+(sizeof( float) *3)));
-        startOfTriangles = startOfVertecis + sizeOfVertices;
-        //------------------------------------------
-        //--------------num of triangle and indices
-        //------------------------------------------
-
-        pos = startOfTriangles;
-        fsetpos(fp, & pos);
-
-        fread( & numTriangles, sizeof(unsigned short),1, fp);
-        if (numTriangles > 0) {
-            isTriangle = true;
-        }
-        model_triangles.resize(numTriangles);
-
-        for (int i = 0; i < numTriangles; i++) {
-            fread( & model_triangles[i].flags, sizeof(unsigned short),1, fp);
-            fread(model_triangles[i].vertexIndices, sizeof(unsigned short),3, fp);
-            fread(model_triangles[i].vertexNormals, sizeof( float),3 * 3, fp);
-            fread(model_triangles[i].s, sizeof( float),3, fp);
-            fread(model_triangles[i].t, sizeof( float),3, fp);
-            fread( & model_triangles[i].smoothingGroup, sizeof(unsigned char),1, fp);
-            fread( & model_triangles[i].groupIndex, sizeof(unsigned char),1, fp);
-
-            // TODO: calculate triangle normal
-        }
-
-        int sizeOfTriangles = sizeof(unsigned short)+(numTriangles * ((sizeof(unsigned short) *4)+(sizeof( float) *15)
-        +(sizeof(unsigned char) *2)));
-        startOfGroups = startOfTriangles + sizeOfTriangles;
-
-        //----------------------------------
-        //--------------number of groups
-        //----------------------------------
-
-        pos = startOfGroups;
-        fsetpos(fp, & pos);
-
-        fread( & numGroups, sizeof(unsigned short),1, fp);
-        if (numGroups > 0) {
-            isGroup = true;
-        }
-        model_groups.resize(numGroups);
-
-        numGroupTriangles = new GLushort[numGroups];
-        numGroupIndices = new GLuint[numGroups];
-
-        int numGT = 0;
-        for (int i = 0; i < numGroups; i++) {
-            fread( & model_groups[i].flags, sizeof(unsigned char),1, fp);
-            fread(model_groups[i].name, sizeof( char),32, fp);
-
-            fread( & numGroupTriangles[i], sizeof(unsigned short),1, fp);
-            numGroupIndices[i] = 3 * numGroupTriangles[i];
-
-            model_groups[i].triangleIndices.resize(numGroupTriangles[i]);
-            if (numGroupTriangles[i] > 0)
-                fread( & model_groups[i].triangleIndices[0], sizeof(unsigned short),numGroupTriangles[i], fp);
-            numGT += numGroupTriangles[i];
-            fread( & model_groups[i].materialIndex, sizeof( char),1, fp);
-        }
-
-        int sizeOfGroups = sizeof(unsigned short)+(numGroups * ((sizeof( char) *34)+(sizeof(unsigned short) *1)))
-        +(sizeof(unsigned short) *numGT);
-        startOfMaterials = startOfGroups + sizeOfGroups;
-
         //----------------------------------
         //--------------number of materials
         //----------------------------------
-
-        pos = startOfMaterials;
-        fsetpos(fp, & pos);
 
         fread( & numMaterials, sizeof(unsigned short),1, fp);
         if (numMaterials > 0) {
@@ -1156,94 +1210,3 @@ public class CMS3DModelLoader {
         return isJoint;
     }
 }
-
-class ms3d_vertex {
-    byte flags;
-    float vertex[] = new float[3];
-    //-----------------------------------
-    //-- index of joints in milkshape
-    //-----------------------------------
-    byte boneId;
-    byte referenceCount;
-
-    byte[] boneIds = new byte[3];
-    byte[] weights = new byte[3];
-    int extra;
-    float renderColor[] = new float[3];
-
-    public ms3d_vertex(byte flags, float[] vertex, byte boneId, byte referenceCount) {
-        this.flags = flags;
-        this.vertex = vertex;
-        this.boneId = boneId;
-        this.referenceCount = referenceCount;
-    }
-};
-
-class ms3d_triangle {
-    short flags;
-    short vertexIndices[] = new short[3];
-    float vertexNormals[][] = new float[3][3];
-    float s[] = new float[3];
-    float t[] = new float[3];
-    float normal[] = new float[3];
-    byte smoothingGroup;
-    byte groupIndex;
-};
-
-class ms3d_group {
-    byte flags;
-    byte[] name = new byte[32];
-    List<Short> triangleIndices;
-    byte materialIndex;
-    List<Character> comment;
-};
-
-class ms3d_material {
-    byte name[] = new byte[32];
-    float ambient[] = new float[4];
-    float diffuse[] = new float[4];
-    float specular[] = new float[4];
-    float emissive[] = new float[4];
-    float shininess;
-    float transparency;
-    byte mode;
-    byte texture[] = new byte[CMS3DModelLoader.MAX_TEXTURE_FILENAME_SIZE];
-    byte alphamap[] = new byte[CMS3DModelLoader.MAX_TEXTURE_FILENAME_SIZE];
-    int id;
-    List<Character> comment;
-};
-
-class ms3d_keyframe {
-    float time;
-    float key[] = new float[3];
-};
-
-class ms3d_tangent {
-    float tangentIn[] = new float[3];
-    float tangentOut[] = new float[3];
-};
-
-class ms3d_joint {
-    byte flags;
-    byte name[] = new byte[32];
-    byte parentName[] = new byte[32];
-
-    float rot[] = new float[3];
-    float pos[] = new float[3];
-
-    List<ms3d_keyframe> rotationKeys;
-    List<ms3d_keyframe> positionKeys;
-    List<ms3d_tangent> tangents;
-
-    List<Character> comment;
-    float color[] = new float[3];
-
-    // used for rendering
-
-    int parentIndex;
-    float matLocalSkeleton[][] = new float[3][4];
-    float matGlobalSkeleton[][] = new float[3][4];
-
-    float matLocal[][] = new float[3][4];
-    float matGlobal[][] = new float[3][4];
-};
