@@ -11,6 +11,7 @@ import java.nio.IntBuffer;
 import java.nio.channels.Channel;
 import java.nio.channels.ReadableByteChannel;
 import java.util.HashMap;
+import java.util.Locale;
 
 import ir.piana.dev.gl.toolkit.CMS3DModelLoader;
 import org.apache.commons.io.FileUtils;
@@ -39,24 +40,16 @@ public class Texture {
                     CMS3DModelLoader.class.getResource(
                             texture.substring(10).trim()) :
                     new URL(texture);
-            /*InputStream inputStream = texture.startsWith("classpath-") ?
-                    CMS3DModelLoader.class.getResourceAsStream(
-                            texture.substring(10).trim()) :
-                    new ByteArrayInputStream(FileUtils.readFileToByteArray(new File(texture)));
 
-            ByteBuffer byteBuffer = ByteBuffer.allocate(inputStream.available());
-            if (inputStream.available() > 0) {
-                byteBuffer.put(inputStream.readNBytes(inputStream.available()));
-            }*/
-
-            /*String absolutePath = new File(texture.startsWith("classpath-") ? texture.substring(10) : texture)
-                    .getPath().substring(1);*/
-            /*if (!System.getProperty("os.name").contains("Windows")) { // TODO Language/region agnostic value for 'Windows' ?
+            String path = null;
+            if (System.getProperty("os.name").contains("Windows")) { // TODO Language/region agnostic value for 'Windows' ?
                 // stbi_load requires a file system path, NOT a classpath resource path
-                absolutePath = File.separator + absolutePath;
-            }*/
+                path = url.toString().substring(6);
+            } else if (System.getProperty("os.name").toLowerCase().contains("linux")) {
+                path = File.separator + url.toString().substring(6);
+            }
 
-            buffer = STBImage.stbi_load(url.toString().substring(6) , w, h, channels, 4);
+            buffer = STBImage.stbi_load(path , w, h, channels, 4);
 //            buffer = STBImage.stbi_load_from_memory(byteBuffer, w, h, channels, 4);
             if (buffer == null) {
                 throw new Exception("Can't load file " + texture + " " + STBImage.stbi_failure_reason());

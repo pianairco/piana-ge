@@ -24,7 +24,8 @@ public class T6RenderUnit extends BaseRenderUnit {
     public void preRender() {
         CMS3DModelLoader modelLoader = new CMS3DModelLoader();
         try {
-            modelLoader.initModel("C:\\projects\\piana-ge\\src\\main\\resources\\models\\dwarf1.ms3d");
+//            modelLoader.initModel("C:\\projects\\piana-ge\\src\\main\\resources\\models\\dwarf1.ms3d");
+            modelLoader.initModel("/home/rahmati/projects/piana-ge/src/main/resources/models/dwarf1.ms3d");
 //            modelLoader.initModel("classpath-/models/dwarf1.ms3d");
         } catch (IOException e) {
             e.printStackTrace();

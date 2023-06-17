@@ -121,7 +121,7 @@ public class CMS3DModelLoader {
     //---- variable bones
     //------------------------------------------------------
 
-    char[] parent;
+    String[] parent;
 
     public CMS3DModelLoader() {
         ModelClear();
@@ -343,133 +343,110 @@ public class CMS3DModelLoader {
             model_materials = new ArrayList(numMaterials);
 
             for (int i = 0; i < numMaterials; i++) {
-                /*fread(model_materials[i].name, sizeof( char),32, fp);
-                fread( & model_materials[i].ambient, sizeof( float),4, fp);
-                fread( & model_materials[i].diffuse, sizeof( float),4, fp);
-                fread( & model_materials[i].specular, sizeof( float),4, fp);
-                fread( & model_materials[i].emissive, sizeof( float),4, fp);
-                fread( & model_materials[i].shininess, sizeof( float),1, fp);
-                fread( & model_materials[i].transparency, sizeof( float),1, fp);
-                fread( & model_materials[i].mode, sizeof(unsigned char),1, fp);
-                fread(model_materials[i].texture, sizeof( char),MAX_TEXTURE_FILENAME_SIZE, fp);
-                fread(model_materials[i].alphamap, sizeof( char),MAX_TEXTURE_FILENAME_SIZE, fp);
+                String name = readString(bais, 32);
+                float[] ambient = readFloats(bais, 4);
+                float[] diffuse = readFloats(bais, 4);
+                float[] specular = readFloats(bais, 4);
+                float[] emissive = readFloats(bais, 4);
+                float shininess = readFloat(bais);
+                float transparency = readFloat(bais);
+                byte mode = readByte(bais);
+                String texture = readString(bais, MAX_TEXTURE_FILENAME_SIZE);
+                String alphamap = readString(bais, MAX_TEXTURE_FILENAME_SIZE);
 
                 // set alpha
-                model_materials[i].ambient[3] = model_materials[i].transparency;
-                model_materials[i].diffuse[3] = model_materials[i].transparency;
-                model_materials[i].specular[3] = model_materials[i].transparency;
-                model_materials[i].emissive[3] = model_materials[i].transparency;*/
+                ambient[3] = transparency;
+                diffuse[3] = transparency;
+                specular[3] = transparency;
+                emissive[3] = transparency;
+
+                model_materials.add(new ms3d_material(name,
+                        ambient, diffuse, specular, emissive,
+                        shininess, transparency, mode,
+                        texture, alphamap, 0, null));
+
             }
 
+            //-----------------------------------------
+            //-------------animation
+            //-----------------------------------------
+
+            model_animationFps = readFloat(bais);
+
+            if (model_animationFps < 1.0f)
+                model_animationFps = 1.0f;
+            model_currentTime = readFloat(bais);
+            model_totalFrames = readInt(bais);
+
+            //-------------------------
+            //------------ joints
+            //-------------------------
+
+            numJoints = readChar(bais);
+            if (numJoints > 0) {
+                isJoint = true;
+            }
+            model_joints = new ArrayList(numJoints);
+
+            parent = new String[numJoints];
+
+            /*for (int i = 0; i < numJoints; i++) {
+                parent[i] = new char[32];
+            }*/
+
+            for (int i = 0; i < numJoints; i++) {
+                byte flags = readByte(bais);
+                String name = readString(bais, 32);
+                parent[i] = name;
+                String parentName =readString(bais, 32);
+                float[] rot = readFloats(bais, 3);
+                float[] pos = readFloats(bais, 3);
+
+                numKeyFramesRot = readChar(bais);
+                List<ms3d_keyframe> rotationKeys = new ArrayList(numKeyFramesRot);
+
+                numKeyFramesPos = readChar(bais);
+                List<ms3d_keyframe> positionKeys = new ArrayList(numKeyFramesPos);
+
+                // the frame time is in seconds, so multiply it by the animation fps, to get the frames
+                // rotation channel
+                for (int j = 0; j < numKeyFramesRot; j++) {
+                    rotationKeys.add(ms3d_keyframe.builder()
+                            .time(model_animationFps * readFloat(bais))
+                            .key(readFloats(bais, 3))
+                            .build());
+                }
+                // translation channel
+                for (int j = 0; j < numKeyFramesPos; j++) {
+                    positionKeys.add(ms3d_keyframe.builder()
+                            .time(model_animationFps * readFloat(bais))
+                            .key(readFloats(bais, 3))
+                            .build());
+                }
+
+                int parentIndex = -1;
+
+                if (i == 0) {
+                    parentIndex = -1;
+                } else {
+                    for (int j = 0; j < numJoints; j++) {
+                        if (model_joints.get(j).name.equals(model_joints.get(i).parentName)) {
+                            parentIndex = j;
+                            break;
+                        }
+                    }
+                }
+                model_joints.add(new ms3d_joint(flags, name, parentName, rot, pos,
+                        rotationKeys, positionKeys, null,
+                        null, null, parentIndex,
+                        null, null, null, null));
+            }
             System.out.println();
         } catch (Exception e) {
             return false;
         }
 
 /*
-
-        //----------------------------------
-        //--------------number of materials
-        //----------------------------------
-
-        fread( & numMaterials, sizeof(unsigned short),1, fp);
-        if (numMaterials > 0) {
-            isMaterial = true;
-        }
-        model_materials.resize(numMaterials);
-
-        for (int i = 0; i < numMaterials; i++) {
-            fread(model_materials[i].name, sizeof( char),32, fp);
-            fread( & model_materials[i].ambient, sizeof( float),4, fp);
-            fread( & model_materials[i].diffuse, sizeof( float),4, fp);
-            fread( & model_materials[i].specular, sizeof( float),4, fp);
-            fread( & model_materials[i].emissive, sizeof( float),4, fp);
-            fread( & model_materials[i].shininess, sizeof( float),1, fp);
-            fread( & model_materials[i].transparency, sizeof( float),1, fp);
-            fread( & model_materials[i].mode, sizeof(unsigned char),1, fp);
-            fread(model_materials[i].texture, sizeof( char),MAX_TEXTURE_FILENAME_SIZE, fp);
-            fread(model_materials[i].alphamap, sizeof( char),MAX_TEXTURE_FILENAME_SIZE, fp);
-
-            // set alpha
-            model_materials[i].ambient[3] = model_materials[i].transparency;
-            model_materials[i].diffuse[3] = model_materials[i].transparency;
-            model_materials[i].specular[3] = model_materials[i].transparency;
-            model_materials[i].emissive[3] = model_materials[i].transparency;
-        }
-
-        int sizeOfMaterial = sizeof(unsigned short)+(numMaterials * ((sizeof( char) *
-        (33 + (2 * MAX_TEXTURE_FILENAME_SIZE)) )+(sizeof( float) *18)	)	);
-        startOfAnimation = startOfMaterials + sizeOfMaterial;
-
-        //-----------------------------------------
-        //-------------animation
-        //-----------------------------------------
-
-        pos = startOfAnimation;
-        fsetpos(fp, & pos);
-
-        fread( & model_animationFps, sizeof( float),1, fp);
-
-        if (model_animationFps < 1.0f)
-            model_animationFps = 1.0f;
-        fread( & model_currentTime, sizeof( float),1, fp);
-        fread( & model_totalFrames, sizeof( int),1, fp);
-
-        //-------------------------
-        //------------ joints
-        //-------------------------
-
-        fread( & numJoints, sizeof(unsigned short),1, fp);
-        if (numJoints > 0) {
-            isJoint = true;
-        }
-        model_joints.resize(numJoints);
-
-        parent = new MSchar[numJoints];
-
-        for (int i = 0; i < numJoints; i++) {
-            parent[i] = new char[32];
-        }
-
-        for (int i = 0; i < numJoints; i++) {
-            fread( & model_joints[i].flags, sizeof(unsigned char),1, fp);
-            fread(model_joints[i].name, sizeof( char),32, fp);
-            strcpy(parent[i], model_joints[i].name);
-            fread(model_joints[i].parentName, sizeof( char),32, fp);
-            fread(model_joints[i].rot, sizeof( float),3, fp);
-            fread(model_joints[i].pos, sizeof( float),3, fp);
-
-            fread( & numKeyFramesRot, sizeof(unsigned short),1, fp);
-            model_joints[i].rotationKeys.resize(numKeyFramesRot);
-
-            fread( & numKeyFramesPos, sizeof(unsigned short),1, fp);
-            model_joints[i].positionKeys.resize(numKeyFramesPos);
-
-            // the frame time is in seconds, so multiply it by the animation fps, to get the frames
-            // rotation channel
-            for (int j = 0; j < numKeyFramesRot; j++) {
-                fread( & model_joints[i].rotationKeys[j].time, sizeof( float),1, fp);
-                fread( & model_joints[i].rotationKeys[j].key, sizeof( float),3, fp);
-                model_joints[i].rotationKeys[j].time *= model_animationFps;
-            }
-            // translation channel
-            for (int j = 0; j < numKeyFramesPos; j++) {
-                fread( & model_joints[i].positionKeys[j].time, sizeof( float),1, fp);
-                fread( & model_joints[i].positionKeys[j].key, sizeof( float),3, fp);
-                model_joints[i].positionKeys[j].time *= model_animationFps;
-            }
-            if (i == 0) {
-                model_joints[i].parentIndex = -1;
-            } else {
-                for (int j = 0; j < numJoints; j++) {
-                    if (strcmp(model_joints[j].name, model_joints[i].parentName) == 0) {
-                        model_joints[i].parentIndex = j;
-                        break;
-                    }
-                }
-            }
-
-        }
 
         long filePos = ftell(fp);
         if (filePos < fSize) {
