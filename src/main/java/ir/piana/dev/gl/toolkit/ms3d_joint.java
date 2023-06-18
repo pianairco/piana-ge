@@ -19,8 +19,8 @@ public class ms3d_joint {
     List<ms3d_keyframe> positionKeys;
     List<ms3d_tangent> tangents;
 
-    List<Character> comment;
-    private float color[];// = new float[3];
+    String comment;
+    float color[];// = new float[3];
 
     // used for rendering
 

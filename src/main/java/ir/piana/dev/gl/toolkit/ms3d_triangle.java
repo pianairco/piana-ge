@@ -2,8 +2,8 @@ package ir.piana.dev.gl.toolkit;
 
 public class ms3d_triangle {
     short flags;
-    short[] vertexIndices = new short[3];
-    float[] vertexNormals = new float[9];
+    char[] vertexIndices;// = new short[3];
+    float[] vertexNormals;// = new float[9];
     float[] s = new float[3];
     float[] t = new float[3];
     float[] normal = new float[3];
@@ -11,7 +11,7 @@ public class ms3d_triangle {
     byte groupIndex;
 
     public ms3d_triangle(short flags,
-                         short vertexIndices[],
+                         char vertexIndices[],
                          float vertexNormals[],
                          float s[],
                          float t[],

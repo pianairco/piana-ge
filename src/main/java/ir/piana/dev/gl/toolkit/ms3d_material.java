@@ -23,5 +23,5 @@ public class ms3d_material {
     String alphamap;
 //    byte alphamap[] = new byte[CMS3DModelLoader.MAX_TEXTURE_FILENAME_SIZE];
     int id;
-    List<Character> comment;
+    String comment;
 }

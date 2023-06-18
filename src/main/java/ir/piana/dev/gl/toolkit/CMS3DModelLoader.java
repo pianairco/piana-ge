@@ -12,6 +12,7 @@ import java.nio.ByteOrder;
 import java.nio.IntBuffer;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class CMS3DModelLoader {
@@ -52,7 +53,7 @@ public class CMS3DModelLoader {
     protected List<ms3d_group> model_groups = new ArrayList<>();
     protected List<ms3d_material> model_materials = new ArrayList<>();
     protected List<ms3d_joint> model_joints = new ArrayList<>();
-    protected List<Character> model_comment = new ArrayList<>();
+    protected String model_comment = null;
 
     //------------------------------------------------------
     //---- model inclusive
@@ -76,11 +77,11 @@ public class CMS3DModelLoader {
     //----
     //------------------------------------------------------
 
-    float[] group_joints_array;
+    float[][] group_joints_array;
     float[] color_joints_array;
     float[] p_color_joints_array;
 
-    float[] group_vertices_array;
+    float[][] group_vertices_array;
     float[] normals_array;
     float[] tex_coord_array;
 
@@ -88,10 +89,10 @@ public class CMS3DModelLoader {
     //----
     //------------------------------------------------------
 
-    short[] joints_indices;
-    short[] p_joints_indices;
+    char[] joints_indices;
+    char[] p_joints_indices;
 
-    short[] vertices_indices;
+    char[][] vertices_indices;
 
     //------------------------------------------------------
     //----
@@ -147,7 +148,6 @@ public class CMS3DModelLoader {
         model_groups.clear();
         model_materials.clear();
         model_joints.clear();
-        model_comment.clear();
     }
 
     boolean IsCorrectID(String id) {
@@ -250,11 +250,11 @@ public class CMS3DModelLoader {
 
         try (MemoryStack stack = MemoryStack.stackPush();
              ByteArrayInputStream bais = (filename.startsWith("classpath-") ?
-                new ByteArrayInputStream(CMS3DModelLoader.class.getResourceAsStream(
-                        filename.substring(10).trim()).readAllBytes()) :
-                new ByteArrayInputStream(FileUtils.readFileToByteArray(new File(filename))))) {
+                     new ByteArrayInputStream(CMS3DModelLoader.class.getResourceAsStream(
+                             filename.substring(10).trim()).readAllBytes()) :
+                     new ByteArrayInputStream(FileUtils.readFileToByteArray(new File(filename))))) {
             byte[] bytes = readBytes(bais, 10);
-            if(!IsCorrectID(new String(bytes))) {
+            if (!IsCorrectID(new String(bytes))) {
                 System.out.println("file is incorrect!");
                 throw new Exception("error occurred!");
             }
@@ -296,7 +296,7 @@ public class CMS3DModelLoader {
             for (int i = 0; i < numTriangles; i++) {
 
                 short flags = readShort(bais);
-                char[] vertexIndices = readChars(bais, 3);
+                char[] verticesIndices = readChars(bais, 3);
                 float[] vertexNormals = readFloats(bais, 9);
                 float[] s = readFloats(bais, 3);
                 float[] t = readFloats(bais, 3);
@@ -305,7 +305,7 @@ public class CMS3DModelLoader {
 
 
                 model_triangles.add(new ms3d_triangle(
-                        flags, vertices_indices, vertexNormals, s, t, new float[3], smoothingGroup, groupIndex
+                        flags, verticesIndices, vertexNormals, s, t, new float[3], smoothingGroup, groupIndex
                 ));
                 // TODO: calculate triangle normal
             }
@@ -398,7 +398,7 @@ public class CMS3DModelLoader {
                 byte flags = readByte(bais);
                 String name = readString(bais, 32);
                 parent[i] = name;
-                String parentName =readString(bais, 32);
+                String parentName = readString(bais, 32);
                 float[] rot = readFloats(bais, 3);
                 float[] pos = readFloats(bais, 3);
 
@@ -429,226 +429,212 @@ public class CMS3DModelLoader {
                 if (i == 0) {
                     parentIndex = -1;
                 } else {
-                    for (int j = 0; j < numJoints; j++) {
-                        if (model_joints.get(j).name.equals(model_joints.get(i).parentName)) {
+                    for (int j = 0; j < numJoints - 1; j++) {
+                        if (model_joints.get(j).name.equals(parentName)) {
                             parentIndex = j;
                             break;
                         }
                     }
                 }
                 model_joints.add(new ms3d_joint(flags, name, parentName, rot, pos,
-                        rotationKeys, positionKeys, null,
-                        null, null, parentIndex,
-                        null, null, null, null));
+                        rotationKeys, positionKeys, new ArrayList(),
+                        null, new float[3], parentIndex,
+                        new float[3][4], new float[3][4], new float[3][4], new float[3][4]));
+            }
+
+            if (bais.available() > 0) {
+                int subVersion = 0;
+                subVersion = readInt(bais);
+                if (subVersion == 1) {
+                    int numComments = 0;
+                    int commentSize = 0;
+
+                    // group comments
+                    numComments = readInt(bais);
+                    for (int i = 0; i < numComments; i++) {
+                        int index = 0;
+                        index = readInt(bais);
+                        commentSize = readInt(bais);
+                        String comment = null;
+                        if (commentSize > 0)
+                            comment = readString(bais, commentSize);
+                        if (index >= 0 && index < (int) model_groups.size())
+                            model_groups.get(index).comment = comment;
+                    }
+
+                    // material comments
+                    numComments = readInt(bais);
+                    for (int i = 0; i < numComments; i++) {
+                        int index;
+                        index = readInt(bais);
+                        commentSize = readInt(bais);
+                        String comment = null;
+                        if (commentSize > 0)
+                            comment = readString(bais, commentSize);
+                        if (index >= 0 && index < (int) model_materials.size())
+                            model_materials.get(index).comment = comment;
+                    }
+
+                    // joint comments
+                    numComments = readInt(bais);
+                    for (int i = 0; i < numComments; i++) {
+                        int index;
+                        index = readInt(bais);
+                        String comment = null;
+                        commentSize = readInt(bais);
+                        if (commentSize > 0)
+                            comment = readString(bais, commentSize);
+                        if (index >= 0 && index < (int) model_joints.size())
+                            model_joints.get(index).comment = comment;
+                    }
+
+                    // model comments
+                    numComments = readInt(bais);
+                    if (numComments == 1) {
+                        String comment = null;
+                        commentSize = readInt(bais);
+                        if (commentSize > 0)
+                            comment = readString(bais, commentSize);
+                        model_comment = comment;
+                    }
+                } else {
+                    // "Unknown subversion for comments %d\n", subVersion);
+                }
+            }
+
+            if (bais.available() > 0) {
+                int subVersion = 0;
+                subVersion = readInt(bais);
+                if (subVersion == 2) {
+                    for (int i = 0; i < numVertices; i++) {
+                        model_vertices.get(i).boneIds = readBytes(bais, 3);
+                        model_vertices.get(i).weights = readBytes(bais, 3);
+                        model_vertices.get(i).extra = readInt(bais);
+                    }
+                } else if (subVersion == 1) {
+                    for (int i = 0; i < numVertices; i++) {
+                        model_vertices.get(i).boneIds = readBytes(bais, 3);
+                        model_vertices.get(i).weights = readBytes(bais, 3);
+                    }
+                } else {
+                    // "Unknown subversion for vertex extra %d\n", subVersion);
+                }
+            }
+
+            // joint extra
+            if (bais.available() > 0) {
+                int subVersion = 0;
+                subVersion = readInt(bais);
+                if (subVersion == 1) {
+                    for (int i = 0; i < numJoints; i++) {
+                        model_joints.get(i).color = readFloats(bais, 3);
+                    }
+                } else {
+                    // "Unknown subversion for joint extra %d\n", subVersion);
+                }
+            }
+
+            // model extra
+            if (bais.available() > 0) {
+                int subVersion = 0;
+                subVersion = readInt(bais);
+                if (subVersion == 1) {
+                    model_jointSize = readFloat(bais);
+                    model_transparencyMode = readInt(bais);
+                    model_alphaRef = readFloat(bais);
+                } else {
+                    //"Unknown subversion for model extra %d\n", subVersion);
+                }
+            }
+
+            //------------------------------------------------------
+            //---- get memory
+            //------------------------------------------------------
+
+            if (isJoint) {
+                joints_array = new float[model_joints.size() * 3];
+
+                group_joints_array = new float[model_totalFrames][];
+                for (int i = 0; i < model_totalFrames; i++) {
+                    group_joints_array[i] = new float[model_joints.size() * 3];
+                }
+
+                color_joints_array = new float[model_joints.size() * 3];
+                p_color_joints_array = new float[model_joints.size() * 3];
+
+                joints_indices = new char[(model_joints.size() - 1) * 2];
+                p_joints_indices = new char[model_joints.size()];
+            }
+
+            //--------------------------------------------------------
+
+            if (isVertex) {
+                vertices_array = new float[numVertices * 3];
+
+                group_vertices_array = new float[model_totalFrames][];
+                for (int i = 0; i < model_totalFrames; i++) {
+                    group_vertices_array[i] = new float[numVertices * 3];
+                }
+
+                vertices_indices = new char[numGroups][];
+                for (int i = 0; i < numGroups; i++) {
+                    vertices_indices[i] = new char[numGroupTriangles[i] * 3];
+                }
+
+                normals_array = new float[numVertices * 3];
+                tex_coord_array = new float[numVertices * 2];
+            }
+
+
+            //--------------------------------------------------------
+
+            if (isMaterial) {
+                materialsIndex = new int[numGroups];
+            }
+
+            //--------------------------------------------------------
+
+            if (isJoint) {
+                SetupJoints();
+                SetFrame(-1);
             }
             System.out.println();
         } catch (Exception e) {
             return false;
         }
 
-/*
-
-        long filePos = ftell(fp);
-        if (filePos < fSize) {
-            int subVersion = 0;
-            fread( & subVersion, sizeof( int),1, fp);
-            if (subVersion == 1) {
-                int numComments = 0;
-                size_t commentSize = 0;
-
-                // group comments
-                fread( & numComments, sizeof( int),1, fp);
-                for (int i = 0; i < numComments; i++) {
-                    int index;
-                    fread( & index, sizeof( int),1, fp);
-                    List<char> comment;
-                    fread( & commentSize, sizeof(size_t), 1, fp);
-                    comment.resize(commentSize);
-                    if (commentSize > 0)
-                        fread( & comment[0], sizeof( char),commentSize, fp);
-                    if (index >= 0 && index < (int) model_groups.size())
-                        model_groups[index].comment = comment;
-                }
-
-                // material comments
-                fread( & numComments, sizeof( int),1, fp);
-                for (int i = 0; i < numComments; i++) {
-                    int index;
-                    fread( & index, sizeof( int),1, fp);
-                    List<char> comment;
-                    fread( & commentSize, sizeof(size_t), 1, fp);
-                    comment.resize(commentSize);
-                    if (commentSize > 0)
-                        fread( & comment[0], sizeof( char),commentSize, fp);
-                    if (index >= 0 && index < (int) model_materials.size())
-                        model_materials[index].comment = comment;
-                }
-
-                // joint comments
-                fread( & numComments, sizeof( int),1, fp);
-                for (int i = 0; i < numComments; i++) {
-                    int index;
-                    fread( & index, sizeof( int),1, fp);
-                    List<char> comment;
-                    fread( & commentSize, sizeof(size_t), 1, fp);
-                    comment.resize(commentSize);
-                    if (commentSize > 0)
-                        fread( & comment[0], sizeof( char),commentSize, fp);
-                    if (index >= 0 && index < (int) model_joints.size())
-                        model_joints[index].comment = comment;
-                }
-
-                // model comments
-                fread( & numComments, sizeof( int),1, fp);
-                if (numComments == 1) {
-                    List<char> comment;
-                    fread( & commentSize, sizeof(size_t), 1, fp);
-                    comment.resize(commentSize);
-                    if (commentSize > 0)
-                        fread( & comment[0], sizeof( char),commentSize, fp);
-                    model_comment = comment;
-                }
-            } else {
-                // "Unknown subversion for comments %d\n", subVersion);
-            }
-        }
-
-        filePos = ftell(fp);
-        if (filePos < fSize) {
-            int subVersion = 0;
-            fread( & subVersion, sizeof( int),1, fp);
-            if (subVersion == 2) {
-                for (int i = 0; i < numVertices; i++) {
-                    fread( & model_vertices[i].boneIds[0], sizeof( char),3, fp);
-                    fread( & model_vertices[i].weights[0], sizeof(unsigned char),3, fp);
-                    fread( & model_vertices[i].extra, sizeof(unsigned int),1, fp);
-                }
-            } else if (subVersion == 1) {
-                for (int i = 0; i < numVertices; i++) {
-                    fread( & model_vertices[i].boneIds[0], sizeof( char),3, fp);
-                    fread( & model_vertices[i].weights[0], sizeof(unsigned char),3, fp);
-                }
-            } else {
-                // "Unknown subversion for vertex extra %d\n", subVersion);
-            }
-        }
-
-        // joint extra
-        filePos = ftell(fp);
-        if (filePos < fSize) {
-            int subVersion = 0;
-            fread( & subVersion, sizeof( int),1, fp);
-            if (subVersion == 1) {
-                for (int i = 0; i < numJoints; i++) {
-                    fread( & model_joints[i].color, sizeof( float),3, fp);
-                }
-            } else {
-                // "Unknown subversion for joint extra %d\n", subVersion);
-            }
-        }
-
-        // model extra
-        filePos = ftell(fp);
-        if (filePos < fSize) {
-            int subVersion = 0;
-            fread( & subVersion, sizeof( int),1, fp);
-            if (subVersion == 1) {
-                fread( & model_jointSize, sizeof( float),1, fp);
-                fread( & model_transparencyMode, sizeof( int),1, fp);
-                fread( & model_alphaRef, sizeof( float),1, fp);
-            } else {
-                //"Unknown subversion for model extra %d\n", subVersion);
-            }
-        }
-
-        //------------------------------------------------------
-        //---- get memory
-        //------------------------------------------------------
-
-        if (isJoint) {
-            joints_array = new GLfloat[model_joints.size() * 3];
-
-            group_joints_array = new MSfloat[model_totalFrames];
-            for (int i = 0; i < model_totalFrames; i++) {
-                group_joints_array[i] = new GLfloat[model_joints.size() * 3];
-            }
-
-            color_joints_array = new GLfloat[model_joints.size() * 3];
-            p_color_joints_array = new GLfloat[model_joints.size() * 3];
-
-            joints_indices = new GLushort[(model_joints.size() - 1) * 2];
-            p_joints_indices = new GLushort[model_joints.size()];
-        }
-
-        //--------------------------------------------------------
-
-        if (isVertex) {
-            vertices_array = new GLfloat[numVertices * 3];
-
-            group_vertices_array = new MSfloat[model_totalFrames];
-            for (int i = 0; i < model_totalFrames; i++) {
-                group_vertices_array[i] = new GLfloat[numVertices * 3];
-            }
-
-            vertices_indices = new MSushort[numGroups];
-            for (int i = 0; i < numGroups; i++) {
-                vertices_indices[i] = new GLushort[numGroupTriangles[i] * 3];
-            }
-
-            normals_array = new GLfloat[numVertices * 3];
-            tex_coord_array = new GLfloat[numVertices * 2];
-        }
-
-
-        //--------------------------------------------------------
-
-        if (isMaterial) {
-            materialsIndex = new int[numGroups];
-        }
-
-        //--------------------------------------------------------
-
-        if (isJoint) {
-            SetupJoints();
-            SetFrame(-1);
-        }
-    */
         return true;
     }
 
-    /*void SetupJoints() {
+    void SetupJoints() {
         for (int i = 0; i < model_joints.size(); i++) {
-            ms3d_joint * joint = &model_joints[i];
-            AngleMatrix(joint -> rot, joint -> matLocalSkeleton);
-            joint -> matLocalSkeleton[0][3] = joint -> pos[0];
-            joint -> matLocalSkeleton[1][3] = joint -> pos[1];
-            joint -> matLocalSkeleton[2][3] = joint -> pos[2];
+            ms3d_joint joint = model_joints.get(i);
+            MathLib.AngleMatrix(joint.rot, joint.matLocalSkeleton);
+            joint.matLocalSkeleton[0][3] = joint.pos[0];
+            joint.matLocalSkeleton[1][3] = joint.pos[1];
+            joint.matLocalSkeleton[2][3] = joint.pos[2];
 
-            if (joint -> parentIndex == -1 || joint -> parentIndex < 0) {
-                memcpy(joint -> matGlobalSkeleton, joint -> matLocalSkeleton, sizeof(joint -> matGlobalSkeleton));
+            if (joint.parentIndex == -1 || joint.parentIndex < 0) {
+                joint.matGlobalSkeleton = Arrays.stream(joint.matLocalSkeleton).map(float[]::clone).toArray(float[][]::new);
+//                memcpy(joint.matGlobalSkeleton, joint.matLocalSkeleton, sizeof(joint.matGlobalSkeleton.length));
             } else {
-                ms3d_joint * parentJoint = &model_joints[joint -> parentIndex];
-                R_ConcatTransforms(parentJoint -> matGlobalSkeleton, joint -> matLocalSkeleton, joint -> matGlobalSkeleton);
+                ms3d_joint parentJoint = model_joints.get(joint.parentIndex);
+                MathLib.R_ConcatTransforms(parentJoint.matGlobalSkeleton, joint.matLocalSkeleton, joint.matGlobalSkeleton);
             }
 
             SetupTangents();
         }
-    }*/
+    }
 
-    /*void SetupTangents() {
+    void SetupTangents() {
         for (int j = 0; j < model_joints.size(); j++) {
-            ms3d_joint * joint = &model_joints[j];
-            int numPositionKeys = (int) joint -> positionKeys.size();
-            joint -> tangents.resize(numPositionKeys);
+            ms3d_joint joint = model_joints.get(j);
+            int numPositionKeys = (int) joint.positionKeys.size();
+            joint.tangents = new ArrayList(numPositionKeys);
 
             // clear all tangents (zero derivatives)
             for (int k = 0; k < numPositionKeys; k++) {
-                joint -> tangents[k].tangentIn[0] = 0.0f;
-                joint -> tangents[k].tangentIn[1] = 0.0f;
-                joint -> tangents[k].tangentIn[2] = 0.0f;
-                joint -> tangents[k].tangentOut[0] = 0.0f;
-                joint -> tangents[k].tangentOut[1] = 0.0f;
-                joint -> tangents[k].tangentOut[2] = 0.0f;
+                joint.tangents.add(new ms3d_tangent(new float[] {0.0f,  0.0f,  0.0f}, new float[] {0.0f, 0.0f, 0.0f}));
             }
 
             // if there are more than 2 keys, we can calculate tangents, otherwise we use zero derivatives
@@ -664,33 +650,35 @@ public class CMS3DModelLoader {
 
                         k2 = 0;
                     // calculate the tangent, which is the vector from key[k - 1] to key[k + 1]
-                    float tangent[ 3];
-                    tangent[0] = (joint -> positionKeys[k2].key[0] - joint -> positionKeys[k0].key[0]);
-                    tangent[1] = (joint -> positionKeys[k2].key[1] - joint -> positionKeys[k0].key[1]);
-                    tangent[2] = (joint -> positionKeys[k2].key[2] - joint -> positionKeys[k0].key[2]);
+                    float tangent[] = new float[3];
+                    tangent[0] = (joint.positionKeys.get(k2).key[0] - joint.positionKeys.get(k0).key[0]);
+                    tangent[1] = (joint.positionKeys.get(k2).key[1] - joint.positionKeys.get(k0).key[1]);
+                    tangent[2] = (joint.positionKeys.get(k2).key[2] - joint.positionKeys.get(k0).key[2]);
 
                     // weight the incoming and outgoing tangent by their time to avoid changes in speed, if the keys are not within the same interval
-                    float dt1 = joint -> positionKeys[k1].time - joint -> positionKeys[k0].time;
-                    float dt2 = joint -> positionKeys[k2].time - joint -> positionKeys[k1].time;
+                    float dt1 = joint.positionKeys.get(k1).time - joint.positionKeys.get(k0).time;
+                    float dt2 = joint.positionKeys.get(k2).time - joint.positionKeys.get(k1).time;
                     float dt = dt1 + dt2;
-                    joint -> tangents[k1].tangentIn[0] = tangent[0] * dt1 / dt;
-                    joint -> tangents[k1].tangentIn[1] = tangent[1] * dt1 / dt;
-                    joint -> tangents[k1].tangentIn[2] = tangent[2] * dt1 / dt;
+                    joint.tangents.get(k1).tangentIn[0] = tangent[0] * dt1 / dt;
+                    joint.tangents.get(k1).tangentIn[1] = tangent[1] * dt1 / dt;
+                    joint.tangents.get(k1).tangentIn[2] = tangent[2] * dt1 / dt;
 
-                    joint -> tangents[k1].tangentOut[0] = tangent[0] * dt2 / dt;
-                    joint -> tangents[k1].tangentOut[1] = tangent[1] * dt2 / dt;
-                    joint -> tangents[k1].tangentOut[2] = tangent[2] * dt2 / dt;
+                    joint.tangents.get(k1).tangentOut[0] = tangent[0] * dt2 / dt;
+                    joint.tangents.get(k1).tangentOut[1] = tangent[1] * dt2 / dt;
+                    joint.tangents.get(k1).tangentOut[2] = tangent[2] * dt2 / dt;
                 }
             }
         }
-    }*/
+    }
 
-    /*void SetFrame(float frame) {
+    void SetFrame(float frame) {
         if (frame < 0.0f) {
             for (int i = 0; i < model_joints.size(); i++) {
-                ms3d_joint * joint = &model_joints[i];
-                memcpy(joint -> matLocal, joint -> matLocalSkeleton, sizeof(joint -> matLocal));
-                memcpy(joint -> matGlobal, joint -> matGlobalSkeleton, sizeof(joint -> matGlobal));
+                ms3d_joint joint = model_joints.get(i);
+                joint.matLocal = Arrays.stream(joint.matLocalSkeleton).map(float[]::clone).toArray(float[][]::new);
+//                memcpy(joint.matLocal, joint.matLocalSkeleton, sizeof(joint -> matLocal));
+                joint.matGlobal = Arrays.stream(joint.matGlobalSkeleton).map(float[]::clone).toArray(float[][]::new);
+//                memcpy(joint.matGlobal, joint.matGlobalSkeleton, sizeof(joint -> matGlobal));
             }
         } else {
             for (int i = 0; i < model_joints.size(); i++) {
@@ -699,27 +687,27 @@ public class CMS3DModelLoader {
         }
 
         model_currentTime = frame;
-    }*/
+    }
 
-    /*void SetAnimationFPS(int fps) {
+    void SetAnimationFPS(int fps) {
         model_animationFps = fps;
-    }*/
+    }
 
-    /*void EvaluateJoint(int index, float frame) {
-        ms3d_joint * joint = &model_joints[index];
+    void EvaluateJoint(int index, float frame) {
+        ms3d_joint joint = model_joints.get(index);
 
         //
         // calculate joint animation matrix, this matrix will animate matLocalSkeleton
         //
-        vec3_t pos = {0.0f, 0.0f, 0.0f};
-        int numPositionKeys = (int) joint -> positionKeys.size();
+        float[] pos = {0.0f, 0.0f, 0.0f};
+        int numPositionKeys = joint.positionKeys.size();
         if (numPositionKeys > 0) {
             int i1 = -1;
             int i2 = -1;
 
             // find the two keys, where "frame" is in between for the position channel
             for (int i = 0; i < (numPositionKeys - 1); i++) {
-                if (frame >= joint -> positionKeys[i].time && frame < joint -> positionKeys[i + 1].time) {
+                if (frame >= joint.positionKeys.get(i).time && frame < joint.positionKeys.get(i + 1).time) {
                     i1 = i;
                     i2 = i + 1;
                     break;
@@ -729,29 +717,29 @@ public class CMS3DModelLoader {
             // if there are no such keys
             if (i1 == -1 || i2 == -1) {
                 // either take the first
-                if (frame < joint -> positionKeys[0].time) {
-                    pos[0] = joint -> positionKeys[0].key[0];
-                    pos[1] = joint -> positionKeys[0].key[1];
-                    pos[2] = joint -> positionKeys[0].key[2];
+                if (frame < joint.positionKeys.get(0).time) {
+                    pos[0] = joint.positionKeys.get(0).key[0];
+                    pos[1] = joint.positionKeys.get(0).key[1];
+                    pos[2] = joint.positionKeys.get(0).key[2];
                 }
 
                 // or the last key
-                else if (frame >= joint -> positionKeys[numPositionKeys - 1].time) {
-                    pos[0] = joint -> positionKeys[numPositionKeys - 1].key[0];
-                    pos[1] = joint -> positionKeys[numPositionKeys - 1].key[1];
-                    pos[2] = joint -> positionKeys[numPositionKeys - 1].key[2];
+                else if (frame >= joint.positionKeys.get(numPositionKeys - 1).time) {
+                    pos[0] = joint.positionKeys.get(numPositionKeys - 1).key[0];
+                    pos[1] = joint.positionKeys.get(numPositionKeys - 1).key[1];
+                    pos[2] = joint.positionKeys.get(numPositionKeys - 1).key[2];
                 }
             }
 
             // there are such keys, so interpolate using hermite interpolation
             else {
-                ms3d_keyframe * p0 = &joint -> positionKeys[i1];
-                ms3d_keyframe * p1 = &joint -> positionKeys[i2];
-                ms3d_tangent * m0 = &joint -> tangents[i1];
-                ms3d_tangent * m1 = &joint -> tangents[i2];
+                ms3d_keyframe p0 = joint.positionKeys.get(i1);
+                ms3d_keyframe p1 = joint.positionKeys.get(i2);
+                ms3d_tangent m0 = joint.tangents.get(i1);
+                ms3d_tangent m1 = joint.tangents.get(i2);
 
                 // normalize the time between the keys into [0..1]
-                float t = (frame - joint -> positionKeys[i1].time) / (joint -> positionKeys[i2].time - joint -> positionKeys[i1].time);
+                float t = (frame - joint.positionKeys.get(i1).time) / (joint.positionKeys.get(i2).time - joint.positionKeys.get(i1).time);
                 float t2 = t * t;
                 float t3 = t2 * t;
 
@@ -762,21 +750,21 @@ public class CMS3DModelLoader {
                 float h4 = t3 - t2;
 
                 // do hermite interpolation
-                pos[0] = h1 * p0 -> key[0] + h3 * m0 -> tangentOut[0] + h2 * p1 -> key[0] + h4 * m1 -> tangentIn[0];
-                pos[1] = h1 * p0 -> key[1] + h3 * m0 -> tangentOut[1] + h2 * p1 -> key[1] + h4 * m1 -> tangentIn[1];
-                pos[2] = h1 * p0 -> key[2] + h3 * m0 -> tangentOut[2] + h2 * p1 -> key[2] + h4 * m1 -> tangentIn[2];
+                pos[0] = h1 * p0.key[0] + h3 * m0.tangentOut[0] + h2 * p1.key[0] + h4 * m1.tangentIn[0];
+                pos[1] = h1 * p0.key[1] + h3 * m0.tangentOut[1] + h2 * p1.key[1] + h4 * m1.tangentIn[1];
+                pos[2] = h1 * p0.key[2] + h3 * m0.tangentOut[2] + h2 * p1.key[2] + h4 * m1.tangentIn[2];
             }
         }
 
-        vec4_t quat = {0.0f, 0.0f, 0.0f, 1.0f};
-        int numRotationKeys = (int) joint -> rotationKeys.size();
+        float[] quat = {0.0f, 0.0f, 0.0f, 1.0f};
+        int numRotationKeys = (int) joint.rotationKeys.size();
         if (numRotationKeys > 0) {
             int i1 = -1;
             int i2 = -1;
 
             // find the two keys, where "frame" is in between for the rotation channel
             for (int i = 0; i < (numRotationKeys - 1); i++) {
-                if (frame >= joint -> rotationKeys[i].time && frame < joint -> rotationKeys[i + 1].time) {
+                if (frame >= joint.rotationKeys.get(i).time && frame < joint.rotationKeys.get(i + 1).time) {
                     i1 = i;
                     i2 = i + 1;
                     break;
@@ -786,46 +774,47 @@ public class CMS3DModelLoader {
             // if there are no such keys
             if (i1 == -1 || i2 == -1) {
                 // either take the first key
-                if (frame < joint -> rotationKeys[0].time) {
-                    AngleQuaternion(joint -> rotationKeys[0].key, quat);
+                if (frame < joint.rotationKeys.get(0).time) {
+                    MathLib.AngleQuaternion(joint.rotationKeys.get(0).key, quat);
                 }
 
                 // or the last key
-                else if (frame >= joint -> rotationKeys[numRotationKeys - 1].time) {
-                    AngleQuaternion(joint -> rotationKeys[numRotationKeys - 1].key, quat);
+                else if (frame >= joint.rotationKeys.get(numRotationKeys - 1).time) {
+                    MathLib.AngleQuaternion(joint.rotationKeys.get(numRotationKeys - 1).key, quat);
                 }
             }
 
             // there are such keys, so do the quaternion slerp interpolation
             else {
-                float t = (frame - joint -> rotationKeys[i1].time) / (joint -> rotationKeys[i2].time - joint -> rotationKeys[i1].time);
-                vec4_t q1;
-                AngleQuaternion(joint -> rotationKeys[i1].key, q1);
-                vec4_t q2;
-                AngleQuaternion(joint -> rotationKeys[i2].key, q2);
-                QuaternionSlerp(q1, q2, t, quat);
+                float t = (frame - joint.rotationKeys.get(i1).time) / (joint.rotationKeys.get(i2).time - joint.rotationKeys.get(i1).time);
+                float[] q1 = new float[4];
+                MathLib.AngleQuaternion(joint.rotationKeys.get(i1).key, q1);
+                float[] q2 = new float[4];
+                MathLib.AngleQuaternion(joint.rotationKeys.get(i2).key, q2);
+                MathLib.QuaternionSlerp(q1, q2, t, quat);
             }
         }
 
         // make a matrix from pos/quat
-        float matAnimate[ 3][4];
-        QuaternionMatrix(quat, matAnimate);
+        float matAnimate[][] = new float[3][4];
+        MathLib.QuaternionMatrix(quat, matAnimate);
         matAnimate[0][3] = pos[0];
         matAnimate[1][3] = pos[1];
         matAnimate[2][3] = pos[2];
 
         // animate the local joint matrix using: matLocal = matLocalSkeleton * matAnimate
-        R_ConcatTransforms(joint -> matLocalSkeleton, matAnimate, joint -> matLocal);
+        MathLib.R_ConcatTransforms(joint.matLocalSkeleton, matAnimate, joint.matLocal);
 
         // build up the hierarchy if joints
         // matGlobal = matGlobal(parent) * matLocal
-        if (joint -> parentIndex == -1 || joint -> parentIndex < 0) {
-            memcpy(joint -> matGlobal, joint -> matLocal, sizeof(joint -> matGlobal));
+        if (joint.parentIndex == -1 || joint.parentIndex < 0) {
+            joint.matGlobal = Arrays.stream(joint.matLocal).map(float[]::clone).toArray(float[][]::new);
+//            memcpy(joint.matGlobal, joint.matLocal, sizeof(joint.matGlobal));
         } else {
-            ms3d_joint * parentJoint = &model_joints[joint -> parentIndex];
-            R_ConcatTransforms(parentJoint -> matGlobal, joint -> matLocal, joint -> matGlobal);
+            ms3d_joint parentJoint = model_joints.get(joint.parentIndex);
+            MathLib.R_ConcatTransforms(parentJoint.matGlobal, joint.matLocal, joint.matGlobal);
         }
-    }*/
+    }
 
     /*vec3 TransformJoint( const GLfloat v[3], const GLfloat m[3][4]) {
         vec3 out;
@@ -880,8 +869,8 @@ public class CMS3DModelLoader {
             for (int i = 0; i < numWeights; i++) {
 			const ms3d_joint * joint = &model_joints[jointIndices[i]];
                 vec3_t tmp, vert;
-                VectorITransform(vertex -> vertex, joint -> matGlobalSkeleton, tmp);
-                VectorTransform(tmp, joint -> matGlobal, vert);
+                VectorITransform(vertex -> vertex, joint.matGlobalSkeleton, tmp);
+                VectorTransform(tmp, joint.matGlobal, vert);
 
                 out[0] += vert[0] * weights[i];
                 out[1] += vert[1] * weights[i];
@@ -1115,7 +1104,7 @@ public class CMS3DModelLoader {
         return vertices_array;
     }
 
-    float GetGroupVerticesArray(int index) {
+    float[] GetGroupVerticesArray(int index) {
         return group_vertices_array[index];
     }
 
@@ -1123,7 +1112,7 @@ public class CMS3DModelLoader {
         return tex_coord_array;
     }
 
-    short GetVerticesIndices(int index) {
+    char[] GetVerticesIndices(int index) {
         return vertices_indices[index];
     }
 
@@ -1147,7 +1136,7 @@ public class CMS3DModelLoader {
         return joints_array;
     }
 
-    float GetGroupJointsArray(int index) {
+    float[] GetGroupJointsArray(int index) {
         return group_joints_array[index];
     }
 
@@ -1159,11 +1148,11 @@ public class CMS3DModelLoader {
         return p_color_joints_array;
     }
 
-    short[] GetJointsIndices() {
+    char[] GetJointsIndices() {
         return joints_indices;
     }
 
-    short[] GetPJointsIndices() {
+    char[] GetPJointsIndices() {
         return p_joints_indices;
     }
 
