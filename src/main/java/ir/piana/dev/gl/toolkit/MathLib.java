@@ -236,7 +236,7 @@ public class MathLib {
 
 //-----------------------------------------------------------------------
 
-    void VectorTransform(float[] in1/*[3]*/, float[][] in2/*[3][4]*/, float[] out/*[3]*/) {
+    public static void VectorTransform(float[] in1/*[3]*/, float[][] in2/*[3][4]*/, float[] out/*[3]*/) {
         out[0] = DotProduct(in1, in2[0]) + in2[0][3];
         out[1] = DotProduct(in1, in2[1]) + in2[1][3];
         out[2] = DotProduct(in1, in2[2]) + in2[2][3];
@@ -244,7 +244,7 @@ public class MathLib {
 
 //-----------------------------------------------------------------------
 
-    void VectorITransform(float[] in1/*[3]*/, float[][] in2/*[3][4]*/, float[] out/*[3]*/) {
+    public static void VectorITransform(float[] in1/*[3]*/, float[][] in2/*[3][4]*/, float[] out/*[3]*/) {
         float[] tmp = new float[3];
         tmp[0] = in1[0] - in2[0][3];
         tmp[1] = in1[1] - in2[1][3];

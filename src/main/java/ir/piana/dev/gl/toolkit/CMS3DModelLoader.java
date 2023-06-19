@@ -1,19 +1,18 @@
 package ir.piana.dev.gl.toolkit;
 
+import glm.vec._3.Vec3;
+import ir.piana.dev.gl.util.Texture;
 import org.apache.commons.io.FileUtils;
 import org.lwjgl.system.MemoryStack;
 
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.IntBuffer;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+
+import static ir.piana.dev.gl.util.ByteManipulator.*;
 
 public class CMS3DModelLoader {
     public static final int MAX_VERTICES = 65534;
@@ -92,7 +91,7 @@ public class CMS3DModelLoader {
     char[] joints_indices;
     char[] p_joints_indices;
 
-    char[][] vertices_indices;
+    int[][] vertices_indices;
 
     //------------------------------------------------------
     //----
@@ -124,7 +123,7 @@ public class CMS3DModelLoader {
 
     String[] parent;
 
-    public CMS3DModelLoader() {
+    private CMS3DModelLoader() {
         ModelClear();
     }
 
@@ -166,73 +165,10 @@ public class CMS3DModelLoader {
         return true;
     }
 
-    public String readString(ByteArrayInputStream bais, int length) throws IOException {
-        return new String(bais.readNBytes(length), Charset.forName("ASCII"));
-    }
 
-    public byte[] readBytes(ByteArrayInputStream bais, int length) throws IOException {
-        return bais.readNBytes(length);
-    }
 
-    public byte readByte(ByteArrayInputStream bais) throws IOException {
-        return bais.readNBytes(1)[0];
-    }
-
-    public float readFloat(ByteArrayInputStream bais) throws IOException {
-        float[] floats = new float[1];
-        ByteBuffer.wrap(bais.readNBytes(4)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(floats);
-        return floats[0];
-    }
-
-    public float[] readFloats(ByteArrayInputStream bais, int length) throws IOException {
-        float[] floats = new float[length];
-        ByteBuffer.wrap(bais.readNBytes(length * 4)).order(ByteOrder.LITTLE_ENDIAN).asFloatBuffer().get(floats);
-        return floats;
-    }
-
-    public int readInt(ByteArrayInputStream bais) throws IOException {
-        int[] versionBuffer = new int[1];
-        ByteBuffer.wrap(bais.readNBytes(4)).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(versionBuffer);
-        return versionBuffer[0];
-    }
-
-    public int[] readInts(ByteArrayInputStream bais, int length) throws IOException {
-        int[] versionBuffer = new int[length];
-        ByteBuffer.wrap(bais.readNBytes(length * 4)).order(ByteOrder.LITTLE_ENDIAN).asIntBuffer().get(versionBuffer);
-        return versionBuffer;
-    }
-
-    public short readShort(ByteArrayInputStream bais) throws IOException {
-        short[] sizeBuffer = new short[1];
-        ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(sizeBuffer);
-        return sizeBuffer[0];
-    }
-
-    public short[] readShorts(ByteArrayInputStream bais, int length) throws IOException {
-        short[] sizeBuffer = new short[length];
-        ByteBuffer.wrap(bais.readNBytes(2 * length)).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().get(sizeBuffer);
-        return sizeBuffer;
-    }
-
-    public char readChar(ByteArrayInputStream bais) throws IOException {
-        char[] sizeBuffer = new char[1];
-        ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(sizeBuffer);
-        return sizeBuffer[0];
-    }
-
-    public char[] readChars(ByteArrayInputStream bais, int length) throws IOException {
-        char[] sizeBuffer = new char[length];
-        ByteBuffer.wrap(bais.readNBytes(2 * length)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(sizeBuffer);
-        return sizeBuffer;
-    }
-
-    public char readSize(ByteArrayInputStream bais) throws IOException {
-        char[] sizeBuffer = new char[1];
-        ByteBuffer.wrap(bais.readNBytes(2)).order(ByteOrder.LITTLE_ENDIAN).asCharBuffer().get(sizeBuffer);
-        return sizeBuffer[0];
-    }
-
-    public boolean initModel(String filename) throws IOException {
+    public static CMS3DModelRenderer createModelRenderer(String filename) throws IOException {
+        CMS3DModelLoader loader = new CMS3DModelLoader();
         int startOfVertices = 0;
         int startOfTriangles = 0;
         int startOfGroups = 0;
@@ -254,46 +190,46 @@ public class CMS3DModelLoader {
                              filename.substring(10).trim()).readAllBytes()) :
                      new ByteArrayInputStream(FileUtils.readFileToByteArray(new File(filename))))) {
             byte[] bytes = readBytes(bais, 10);
-            if (!IsCorrectID(new String(bytes))) {
+            if (!loader.IsCorrectID(new String(bytes))) {
                 System.out.println("file is incorrect!");
                 throw new Exception("error occurred!");
             }
 
             int version = readInt(bais);
-            if (!IsCorrectVersion(version)) {
+            if (!loader.IsCorrectVersion(version)) {
                 System.out.println("file is incorrect!");
                 throw new Exception("error occurred!");
             }
 
-            ModelClear();
+            loader.ModelClear();
 
             //----------------------------------
             //--------------number of vertices
             //----------------------------------
 
-            numVertices = readChar(bais);
-            if (numVertices > 0) {
-                isVertex = true;
+            loader.numVertices = readChar(bais);
+            if (loader.numVertices > 0) {
+                loader.isVertex = true;
             }
 
-            model_vertices = new ArrayList<>(numVertices);
+            loader.model_vertices = new ArrayList(loader.numVertices);
 
-            for (int i = 0; i < numVertices; i++) {
+            for (int i = 0; i < loader.numVertices; i++) {
                 byte flags = readByte(bais);
                 float[] vertex = readFloats(bais, 3);
                 byte boneId = readByte(bais);
                 byte referenceCount = readByte(bais);
 
-                model_vertices.add(new ms3d_vertex(flags, vertex, boneId, referenceCount));
+                loader.model_vertices.add(new ms3d_vertex(flags, vertex, boneId, referenceCount));
             }
 
-            numTriangles = readSize(bais);
-            if (numTriangles > 0) {
-                isTriangle = true;
+            loader.numTriangles = readSize(bais);
+            if (loader.numTriangles > 0) {
+                loader.isTriangle = true;
             }
-            model_triangles = new ArrayList<>(numTriangles);
+            loader.model_triangles = new ArrayList(loader.numTriangles);
 
-            for (int i = 0; i < numTriangles; i++) {
+            for (int i = 0; i < loader.numTriangles; i++) {
 
                 short flags = readShort(bais);
                 char[] verticesIndices = readChars(bais, 3);
@@ -304,45 +240,45 @@ public class CMS3DModelLoader {
                 byte groupIndex = readByte(bais);
 
 
-                model_triangles.add(new ms3d_triangle(
+                loader.model_triangles.add(new ms3d_triangle(
                         flags, verticesIndices, vertexNormals, s, t, new float[3], smoothingGroup, groupIndex
                 ));
                 // TODO: calculate triangle normal
             }
 
-            numGroups = readChar(bais);
-            if (numGroups > 0) {
-                isGroup = true;
+            loader.numGroups = readChar(bais);
+            if (loader.numGroups > 0) {
+                loader.isGroup = true;
             }
-            model_groups = new ArrayList(numGroups);
+            loader.model_groups = new ArrayList(loader.numGroups);
 
-            numGroupTriangles = new char[numGroups];
-            numGroupIndices = new char[numGroups];
+            loader.numGroupTriangles = new char[loader.numGroups];
+            loader.numGroupIndices = new char[loader.numGroups];
 
             int numGT = 0;
-            for (int i = 0; i < numGroups; i++) {
+            for (int i = 0; i < loader.numGroups; i++) {
                 byte flags = readByte(bais);
                 String name = readString(bais, 32);
 
-                numGroupTriangles[i] = readChar(bais);
-                numGroupIndices[i] = (char) (3 * numGroupTriangles[i]);
+                loader.numGroupTriangles[i] = readChar(bais);
+                loader.numGroupIndices[i] = (char) (3 * loader.numGroupTriangles[i]);
 
-                short[] triangleIndices = new short[numGroupTriangles[i]];
-                if (numGroupTriangles[i] > 0)
-                    triangleIndices = readShorts(bais, numGroupTriangles[i]);
-                numGT += numGroupTriangles[i];
+                short[] triangleIndices = new short[loader.numGroupTriangles[i]];
+                if (loader.numGroupTriangles[i] > 0)
+                    triangleIndices = readShorts(bais, loader.numGroupTriangles[i]);
+                numGT += loader.numGroupTriangles[i];
                 byte materialIndex = readByte(bais);
 
-                model_groups.add(new ms3d_group(flags, name, triangleIndices, materialIndex, null));
+                loader.model_groups.add(new ms3d_group(flags, name, triangleIndices, materialIndex, null));
             }
 
-            numMaterials = readChar(bais);
-            if (numMaterials > 0) {
-                isMaterial = true;
+            loader.numMaterials = readChar(bais);
+            if (loader.numMaterials > 0) {
+                loader.isMaterial = true;
             }
-            model_materials = new ArrayList(numMaterials);
+            loader.model_materials = new ArrayList(loader.numMaterials);
 
-            for (int i = 0; i < numMaterials; i++) {
+            for (int i = 0; i < loader.numMaterials; i++) {
                 String name = readString(bais, 32);
                 float[] ambient = readFloats(bais, 4);
                 float[] diffuse = readFloats(bais, 4);
@@ -360,7 +296,7 @@ public class CMS3DModelLoader {
                 specular[3] = transparency;
                 emissive[3] = transparency;
 
-                model_materials.add(new ms3d_material(name,
+                loader.model_materials.add(new ms3d_material(name,
                         ambient, diffuse, specular, emissive,
                         shininess, transparency, mode,
                         texture, alphamap, 0, null));
@@ -371,55 +307,55 @@ public class CMS3DModelLoader {
             //-------------animation
             //-----------------------------------------
 
-            model_animationFps = readFloat(bais);
+            loader.model_animationFps = readFloat(bais);
 
-            if (model_animationFps < 1.0f)
-                model_animationFps = 1.0f;
-            model_currentTime = readFloat(bais);
-            model_totalFrames = readInt(bais);
+            if (loader.model_animationFps < 1.0f)
+                loader.model_animationFps = 1.0f;
+            loader.model_currentTime = readFloat(bais);
+            loader.model_totalFrames = readInt(bais);
 
             //-------------------------
             //------------ joints
             //-------------------------
 
-            numJoints = readChar(bais);
-            if (numJoints > 0) {
-                isJoint = true;
+            loader.numJoints = readChar(bais);
+            if (loader.numJoints > 0) {
+                loader.isJoint = true;
             }
-            model_joints = new ArrayList(numJoints);
+            loader.model_joints = new ArrayList(loader.numJoints);
 
-            parent = new String[numJoints];
+            loader.parent = new String[loader.numJoints];
 
             /*for (int i = 0; i < numJoints; i++) {
                 parent[i] = new char[32];
             }*/
 
-            for (int i = 0; i < numJoints; i++) {
+            for (int i = 0; i < loader.numJoints; i++) {
                 byte flags = readByte(bais);
                 String name = readString(bais, 32);
-                parent[i] = name;
+                loader.parent[i] = name;
                 String parentName = readString(bais, 32);
                 float[] rot = readFloats(bais, 3);
                 float[] pos = readFloats(bais, 3);
 
-                numKeyFramesRot = readChar(bais);
-                List<ms3d_keyframe> rotationKeys = new ArrayList(numKeyFramesRot);
+                loader.numKeyFramesRot = readChar(bais);
+                List<ms3d_keyframe> rotationKeys = new ArrayList(loader.numKeyFramesRot);
 
-                numKeyFramesPos = readChar(bais);
-                List<ms3d_keyframe> positionKeys = new ArrayList(numKeyFramesPos);
+                loader.numKeyFramesPos = readChar(bais);
+                List<ms3d_keyframe> positionKeys = new ArrayList(loader.numKeyFramesPos);
 
                 // the frame time is in seconds, so multiply it by the animation fps, to get the frames
                 // rotation channel
-                for (int j = 0; j < numKeyFramesRot; j++) {
+                for (int j = 0; j < loader.numKeyFramesRot; j++) {
                     rotationKeys.add(ms3d_keyframe.builder()
-                            .time(model_animationFps * readFloat(bais))
+                            .time(loader.model_animationFps * readFloat(bais))
                             .key(readFloats(bais, 3))
                             .build());
                 }
                 // translation channel
-                for (int j = 0; j < numKeyFramesPos; j++) {
+                for (int j = 0; j < loader.numKeyFramesPos; j++) {
                     positionKeys.add(ms3d_keyframe.builder()
-                            .time(model_animationFps * readFloat(bais))
+                            .time(loader.model_animationFps * readFloat(bais))
                             .key(readFloats(bais, 3))
                             .build());
                 }
@@ -429,14 +365,14 @@ public class CMS3DModelLoader {
                 if (i == 0) {
                     parentIndex = -1;
                 } else {
-                    for (int j = 0; j < numJoints - 1; j++) {
-                        if (model_joints.get(j).name.equals(parentName)) {
+                    for (int j = 0; j < loader.numJoints - 1; j++) {
+                        if (loader.model_joints.get(j).name.equals(parentName)) {
                             parentIndex = j;
                             break;
                         }
                     }
                 }
-                model_joints.add(new ms3d_joint(flags, name, parentName, rot, pos,
+                loader.model_joints.add(new ms3d_joint(flags, name, parentName, rot, pos,
                         rotationKeys, positionKeys, new ArrayList(),
                         null, new float[3], parentIndex,
                         new float[3][4], new float[3][4], new float[3][4], new float[3][4]));
@@ -458,8 +394,8 @@ public class CMS3DModelLoader {
                         String comment = null;
                         if (commentSize > 0)
                             comment = readString(bais, commentSize);
-                        if (index >= 0 && index < (int) model_groups.size())
-                            model_groups.get(index).comment = comment;
+                        if (index >= 0 && index < (int) loader.model_groups.size())
+                            loader.model_groups.get(index).comment = comment;
                     }
 
                     // material comments
@@ -471,8 +407,8 @@ public class CMS3DModelLoader {
                         String comment = null;
                         if (commentSize > 0)
                             comment = readString(bais, commentSize);
-                        if (index >= 0 && index < (int) model_materials.size())
-                            model_materials.get(index).comment = comment;
+                        if (index >= 0 && index < (int) loader.model_materials.size())
+                            loader.model_materials.get(index).comment = comment;
                     }
 
                     // joint comments
@@ -484,8 +420,8 @@ public class CMS3DModelLoader {
                         commentSize = readInt(bais);
                         if (commentSize > 0)
                             comment = readString(bais, commentSize);
-                        if (index >= 0 && index < (int) model_joints.size())
-                            model_joints.get(index).comment = comment;
+                        if (index >= 0 && index < (int) loader.model_joints.size())
+                            loader.model_joints.get(index).comment = comment;
                     }
 
                     // model comments
@@ -495,7 +431,7 @@ public class CMS3DModelLoader {
                         commentSize = readInt(bais);
                         if (commentSize > 0)
                             comment = readString(bais, commentSize);
-                        model_comment = comment;
+                        loader.model_comment = comment;
                     }
                 } else {
                     // "Unknown subversion for comments %d\n", subVersion);
@@ -506,15 +442,15 @@ public class CMS3DModelLoader {
                 int subVersion = 0;
                 subVersion = readInt(bais);
                 if (subVersion == 2) {
-                    for (int i = 0; i < numVertices; i++) {
-                        model_vertices.get(i).boneIds = readBytes(bais, 3);
-                        model_vertices.get(i).weights = readBytes(bais, 3);
-                        model_vertices.get(i).extra = readInt(bais);
+                    for (int i = 0; i < loader.numVertices; i++) {
+                        loader.model_vertices.get(i).boneIds = readBytes(bais, 3);
+                        loader.model_vertices.get(i).weights = readBytes(bais, 3);
+                        loader.model_vertices.get(i).extra = readInt(bais);
                     }
                 } else if (subVersion == 1) {
-                    for (int i = 0; i < numVertices; i++) {
-                        model_vertices.get(i).boneIds = readBytes(bais, 3);
-                        model_vertices.get(i).weights = readBytes(bais, 3);
+                    for (int i = 0; i < loader.numVertices; i++) {
+                        loader.model_vertices.get(i).boneIds = readBytes(bais, 3);
+                        loader.model_vertices.get(i).weights = readBytes(bais, 3);
                     }
                 } else {
                     // "Unknown subversion for vertex extra %d\n", subVersion);
@@ -526,8 +462,8 @@ public class CMS3DModelLoader {
                 int subVersion = 0;
                 subVersion = readInt(bais);
                 if (subVersion == 1) {
-                    for (int i = 0; i < numJoints; i++) {
-                        model_joints.get(i).color = readFloats(bais, 3);
+                    for (int i = 0; i < loader.numJoints; i++) {
+                        loader.model_joints.get(i).color = readFloats(bais, 3);
                     }
                 } else {
                     // "Unknown subversion for joint extra %d\n", subVersion);
@@ -539,9 +475,9 @@ public class CMS3DModelLoader {
                 int subVersion = 0;
                 subVersion = readInt(bais);
                 if (subVersion == 1) {
-                    model_jointSize = readFloat(bais);
-                    model_transparencyMode = readInt(bais);
-                    model_alphaRef = readFloat(bais);
+                    loader.model_jointSize = readFloat(bais);
+                    loader.model_transparencyMode = readInt(bais);
+                    loader.model_alphaRef = readFloat(bais);
                 } else {
                     //"Unknown subversion for model extra %d\n", subVersion);
                 }
@@ -551,59 +487,317 @@ public class CMS3DModelLoader {
             //---- get memory
             //------------------------------------------------------
 
-            if (isJoint) {
-                joints_array = new float[model_joints.size() * 3];
+            if (loader.isJoint) {
+                loader.joints_array = new float[loader.model_joints.size() * 3];
 
-                group_joints_array = new float[model_totalFrames][];
-                for (int i = 0; i < model_totalFrames; i++) {
-                    group_joints_array[i] = new float[model_joints.size() * 3];
+                loader.group_joints_array = new float[loader.model_totalFrames][];
+                for (int i = 0; i < loader.model_totalFrames; i++) {
+                    loader.group_joints_array[i] = new float[loader.model_joints.size() * 3];
                 }
 
-                color_joints_array = new float[model_joints.size() * 3];
-                p_color_joints_array = new float[model_joints.size() * 3];
+                loader.color_joints_array = new float[loader.model_joints.size() * 3];
+                loader.p_color_joints_array = new float[loader.model_joints.size() * 3];
 
-                joints_indices = new char[(model_joints.size() - 1) * 2];
-                p_joints_indices = new char[model_joints.size()];
+                loader.joints_indices = new char[(loader.model_joints.size() - 1) * 2];
+                loader.p_joints_indices = new char[loader.model_joints.size()];
             }
 
             //--------------------------------------------------------
 
-            if (isVertex) {
-                vertices_array = new float[numVertices * 3];
+            if (loader.isVertex) {
+                loader.vertices_array = new float[loader.numVertices * 3];
 
-                group_vertices_array = new float[model_totalFrames][];
-                for (int i = 0; i < model_totalFrames; i++) {
-                    group_vertices_array[i] = new float[numVertices * 3];
+                loader.group_vertices_array = new float[loader.model_totalFrames][];
+                for (int i = 0; i < loader.model_totalFrames; i++) {
+                    loader.group_vertices_array[i] = new float[loader.numVertices * 3];
                 }
 
-                vertices_indices = new char[numGroups][];
-                for (int i = 0; i < numGroups; i++) {
-                    vertices_indices[i] = new char[numGroupTriangles[i] * 3];
+                loader.vertices_indices = new int[loader.numGroups][];
+                for (int i = 0; i < loader.numGroups; i++) {
+                    loader.vertices_indices[i] = new int[loader.numGroupTriangles[i] * 3];
                 }
 
-                normals_array = new float[numVertices * 3];
-                tex_coord_array = new float[numVertices * 2];
+                loader.normals_array = new float[loader.numVertices * 3];
+                loader.tex_coord_array = new float[loader.numVertices * 2];
             }
 
 
             //--------------------------------------------------------
 
-            if (isMaterial) {
-                materialsIndex = new int[numGroups];
+            if (loader.isMaterial) {
+                loader.materialsIndex = new int[loader.numGroups];
             }
 
             //--------------------------------------------------------
 
-            if (isJoint) {
-                SetupJoints();
-                SetFrame(-1);
+            if (loader.isJoint) {
+                loader.SetupJoints();
+                loader.SetFrame(-1);
             }
             System.out.println();
         } catch (Exception e) {
-            return false;
+            return null;
         }
 
-        return true;
+        loader.LoadModel();
+
+        return new CMS3DModelRenderer(loader);
+    }
+
+    public void LoadModel() {
+        //--------------------------------------------------------------
+        //----------------- Load Vertices
+        //--------------------------------------------------------------
+
+        SetupVertexArray();
+
+        //--------------------------------------------------------------
+        //----------------- Load Index Groups
+        //--------------------------------------------------------------
+
+        int[] gIdx = new int[numGroups];
+        for (int j = 0; j < numGroups; j++) {
+            gIdx[j] = 0;
+        }
+        int gIndex = 0;
+
+        for (int i = 0; i < numTriangles; i++) {
+            gIndex = model_triangles.get(i).groupIndex;
+            vertices_indices[gIndex][gIdx[gIndex]] = model_triangles.get(i).vertexIndices[0];
+            gIdx[gIndex] = gIdx[gIndex] + 1;
+            vertices_indices[gIndex][gIdx[gIndex]] = model_triangles.get(i).vertexIndices[1];
+            gIdx[gIndex] = gIdx[gIndex] + 1;
+            vertices_indices[gIndex][gIdx[gIndex]] = model_triangles.get(i).vertexIndices[2];
+            gIdx[gIndex] = gIdx[gIndex] + 1;
+
+            //--------------------------------------------------------------
+            //----------------- Load Vertices Normals
+            //--------------------------------------------------------------
+
+            normals_array[model_triangles.get(i).vertexIndices[0]] = model_triangles.get(i).vertexNormals[0];
+            normals_array[model_triangles.get(i).vertexIndices[0]] = model_triangles.get(i).vertexNormals[1];
+            normals_array[model_triangles.get(i).vertexIndices[0]] = model_triangles.get(i).vertexNormals[2];
+
+            normals_array[model_triangles.get(i).vertexIndices[1]] = model_triangles.get(i).vertexNormals[3];
+            normals_array[model_triangles.get(i).vertexIndices[1]] = model_triangles.get(i).vertexNormals[4];
+            normals_array[model_triangles.get(i).vertexIndices[1]] = model_triangles.get(i).vertexNormals[5];
+
+            normals_array[model_triangles.get(i).vertexIndices[2]] = model_triangles.get(i).vertexNormals[6];
+            normals_array[model_triangles.get(i).vertexIndices[2]] = model_triangles.get(i).vertexNormals[7];
+            normals_array[model_triangles.get(i).vertexIndices[2]] = model_triangles.get(i).vertexNormals[8];
+
+            //--------------------------------------------------------------
+            //----------------- Load Vertices Coordinates ( s for first_axis)
+            //--------------------------------------------------------------
+
+            tex_coord_array[model_triangles.get(i).vertexIndices[0] * 2] = model_triangles.get(i).s[0];
+            tex_coord_array[model_triangles.get(i).vertexIndices[1] * 2] = model_triangles.get(i).s[1];
+            tex_coord_array[model_triangles.get(i).vertexIndices[2] * 2] = model_triangles.get(i).s[2];
+
+            //--------------------------------------------------------------
+            //----------------- Load Vertices Coordinates ( t for second_axis)
+            //--------------------------------------------------------------
+
+            tex_coord_array[model_triangles.get(i).vertexIndices[0] * 2 + 1] = model_triangles.get(i).t[0];
+            tex_coord_array[model_triangles.get(i).vertexIndices[1] * 2 + 1] = model_triangles.get(i).t[1];
+            tex_coord_array[model_triangles.get(i).vertexIndices[2] * 2 + 1] = model_triangles.get(i).t[2];
+        }
+
+        //--------------------------------------------------------------
+        //----------------- Load Textures For Materials And Groups
+        //--------------------------------------------------------------
+
+        SetupTextureArray();
+
+        if (isJoint) {
+            SetupJointsArray();
+        }
+
+        model_vertices.clear();
+        model_triangles.clear();
+        model_groups.clear();
+        model_joints.clear();
+
+    }
+
+    void SetupTextureArray() {
+        for (int i = 0; i < numMaterials; i++) {
+            model_materials.get(i).id = Texture.loadTextureForMs3d(model_materials.get(i).texture);//materialsArray[i]);
+//            LoadTextureFromBitmapFileForMS3D(model_materials.get(i).texture, model_materials.get(i).id);//materialsArray[i]);
+            for (int j = 0; j < numGroups; j++) {
+                if (model_groups.get(j).materialIndex == i) {
+                    materialsIndex[j] = i;
+                }
+
+            }
+        }
+    }
+
+    void SetupVertexArray() {
+        for (int i = 0; i < numVertices; i++) {
+            //3 element of vertex for(x,y,z)
+            vertices_array[i * 3] = model_vertices.get(i).vertex[0];//x
+            vertices_array[i * 3 + 1] = model_vertices.get(i).vertex[1];//y
+            vertices_array[i * 3 + 2] = model_vertices.get(i).vertex[2];//z
+        }
+
+        for (int i = 0; i < model_totalFrames; i++) {
+            SetFrame(i);
+
+            for (int j = 0; j < numVertices; j++) {
+                ms3d_vertex vertex = model_vertices.get(j);
+                Vec3 v = TransformVertex(vertex);
+                //3 element of vertex for(x,y,z)
+                group_vertices_array[i][j * 3] = v.x;//model_vertices[i].vertex[0];//x
+                group_vertices_array[i][j * 3 + 1] = v.y;//model_vertices[i].vertex[1];//y
+                group_vertices_array[i][j * 3 + 2] = v.z;//model_vertices[i].vertex[2];//z
+            }
+        }
+    }
+
+    void SetupJointsArray() {
+        SetFrame(-1);
+        for (int i = 0; i < model_joints.size(); i++) {
+            Vec3 p;
+
+            int parentIdx = model_joints.get(i).parentIndex;
+            if (parentIdx > -1) {
+                p = TransformJoint(model_joints.get(i).pos, model_joints.get(parentIdx).matGlobal);
+            } else {
+                p = new Vec3(model_joints.get(i).pos[0],
+                        model_joints.get(i).pos[1],
+                        model_joints.get(i).pos[2]);
+            }
+
+            joints_array[i * 3] = p.x;
+            joints_array[i * 3 + 1] = p.y;
+            joints_array[i * 3 + 2] = p.z;
+
+            color_joints_array[i * 3] = 0.9f;
+            color_joints_array[i * 3 + 1] = 0.8f;
+            color_joints_array[i * 3 + 2] = 0;
+
+            p_color_joints_array[i * 3] = 1;
+            p_color_joints_array[i * 3 + 1] = 0;
+            p_color_joints_array[i * 3 + 2] = 0;
+
+        }
+
+        for (int i = 0; i < model_totalFrames; i++) {
+            SetFrame(i);
+
+            for (int j = 0; j < numJoints; j++) {
+                Vec3 p;
+
+                int parentIdx = model_joints.get(j).parentIndex;
+                if (parentIdx > -1) {
+                    p = TransformJoint(model_joints.get(j).pos, model_joints.get(parentIdx).matGlobal);
+                } else {
+                    p = new Vec3(model_joints.get(j).pos[0],
+                            model_joints.get(j).pos[1],
+                            model_joints.get(j).pos[2]);
+                }
+
+                group_joints_array[i][j * 3] = p.x;
+                group_joints_array[i][j * 3 + 1] = p.y;
+                group_joints_array[i][j * 3 + 2] = p.z;
+            }
+        }
+
+        for (char i = 0; i < (model_joints.size() - 1); i++) {
+            joints_indices[i * 2] = (char) (i + 1);
+            joints_indices[i * 2 + 1] = (char) model_joints.get(i + 1).parentIndex;
+
+            p_joints_indices[i] = i;
+        }
+        p_joints_indices[model_joints.size() - 1] = (char) (model_joints.size() - 1);
+    }
+
+    /*vec3*/Vec3 TransformVertex(ms3d_vertex vertex) {
+        float[] out = new float[3];/*[3]*/
+        int[] jointIndices/*[4]*/ = new int[4], jointWeights/*[4]*/ = new int[4];
+        FillJointIndicesAndWeights(vertex, jointIndices, jointWeights);
+
+        if (jointIndices[0] < 0 || jointIndices[0] >= (int) model_joints.size() || model_currentTime < 0.0f)
+        {
+            out[0] = vertex.vertex[0];
+            out[1] = vertex.vertex[1];
+            out[2] = vertex.vertex[2];
+        }
+        else
+        {
+            // count valid weights
+            int numWeights = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                if (jointWeights[i] > 0 && jointIndices[i] >= 0 && jointIndices[i] < (int) model_joints.size())
+                    ++numWeights;
+                else
+                    break;
+            }
+
+            // init
+            out[0] = 0.0f;
+            out[1] = 0.0f;
+            out[2] = 0.0f;
+
+            float weights[]/*[4]*/ = { (float) jointWeights[0] / 100.0f,
+                    (float) jointWeights[1] / 100.0f,
+                    (float) jointWeights[2] / 100.0f,
+                    (float) jointWeights[3] / 100.0f };
+            if (numWeights == 0)
+            {
+                numWeights = 1;
+                weights[0] = 1.0f;
+            }
+            // add weighted vertices
+            for (int i = 0; i < numWeights; i++)
+            {
+			ms3d_joint joint = model_joints.get(jointIndices[i]);
+                /*vec3_t*/float[] tmp = new float[3], vert = new float[3];/*[3]*/
+                MathLib.VectorITransform(vertex.vertex, joint.matGlobalSkeleton, tmp);
+                MathLib.VectorTransform(tmp, joint.matGlobal, vert);
+
+                out[0] += vert[0] * weights[i];
+                out[1] += vert[1] * weights[i];
+                out[2] += vert[2] * weights[i];
+            }
+        }
+        /*vec3*/Vec3 v	=	new Vec3(out[0],out[1],out[2]);
+        return v;
+    }
+
+    void FillJointIndicesAndWeights(ms3d_vertex vertex, int jointIndices[]/*[4]*/, int jointWeights[]/*[4]*/) {
+        jointIndices[0] = vertex.boneId;
+        jointIndices[1] = vertex.boneIds[0];
+        jointIndices[2] = vertex.boneIds[1];
+        jointIndices[3] = vertex.boneIds[2];
+        jointWeights[0] = 100;
+        jointWeights[1] = 0;
+        jointWeights[2] = 0;
+        jointWeights[3] = 0;
+        if (vertex.weights[0] != 0 || vertex.weights[1] != 0 || vertex.weights[2] != 0)
+        {
+            jointWeights[0] = vertex.weights[0];
+            jointWeights[1] = vertex.weights[1];
+            jointWeights[2] = vertex.weights[2];
+            jointWeights[3] = 100 - (vertex.weights[0] + vertex.weights[1] + vertex.weights[2]);
+        }
+    }
+
+    Vec3 TransformJoint( float v[]/*[3]*/, float m[][]/*[3][4]*/ )
+    {
+        // M00 M01 M02 M03				V0
+        //
+        // M10 M11 M12 M13				V1
+        //						*
+        // M20 M21 M22 M23				V2
+
+        float x	=	m[0][0] * v[0] + m[0][1] * v[1] + m[0][2] * v[2] + m[0][3] ;
+        float y	=	m[1][0] * v[0] + m[1][1] * v[1] + m[1][2] * v[2] + m[1][3] ;
+        float z	=	m[2][0] * v[0] + m[2][1] * v[1] + m[2][2] * v[2] + m[2][3] ;
+
+        return new Vec3(x, y, z);
     }
 
     void SetupJoints() {
@@ -634,7 +828,7 @@ public class CMS3DModelLoader {
 
             // clear all tangents (zero derivatives)
             for (int k = 0; k < numPositionKeys; k++) {
-                joint.tangents.add(new ms3d_tangent(new float[] {0.0f,  0.0f,  0.0f}, new float[] {0.0f, 0.0f, 0.0f}));
+                joint.tangents.add(new ms3d_tangent(new float[]{0.0f, 0.0f, 0.0f}, new float[]{0.0f, 0.0f, 0.0f}));
             }
 
             // if there are more than 2 keys, we can calculate tangents, otherwise we use zero derivatives
@@ -1112,7 +1306,7 @@ public class CMS3DModelLoader {
         return tex_coord_array;
     }
 
-    char[] GetVerticesIndices(int index) {
+    int[] GetVerticesIndices(int index) {
         return vertices_indices[index];
     }
 
@@ -1128,9 +1322,9 @@ public class CMS3DModelLoader {
         return model_alphaRef;
     }
 
-    /*char GetMaterialForGroup(int index) {
+    int GetMaterialForGroup(int index) {
         return materialsIndex[index];
-    }*/
+    }
 
     float[] GetJointsArray() {
         return joints_array;

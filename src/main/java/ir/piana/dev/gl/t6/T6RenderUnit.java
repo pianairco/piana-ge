@@ -5,6 +5,7 @@ import ir.piana.dev.gl.BaseRenderUnit;
 import ir.piana.dev.gl.RenderUtil;
 import ir.piana.dev.gl.render.CameraController;
 import ir.piana.dev.gl.toolkit.CMS3DModelLoader;
+import ir.piana.dev.gl.toolkit.CMS3DModelRenderer;
 import ir.piana.dev.gl.util.Texture;
 import ir.piana.dev.gl.toolkit.Mesh;
 import ir.piana.dev.gl.render.WindowContext;
@@ -22,10 +23,11 @@ public class T6RenderUnit extends BaseRenderUnit {
 
     @Override
     public void preRender() {
-        CMS3DModelLoader modelLoader = new CMS3DModelLoader();
+        CMS3DModelRenderer renderer = null;
         try {
 //            modelLoader.initModel("C:\\projects\\piana-ge\\src\\main\\resources\\models\\dwarf1.ms3d");
-            modelLoader.initModel("/home/rahmati/projects/piana-ge/src/main/resources/models/dwarf1.ms3d");
+//            modelLoader.initModel("/home/rahmati/projects/piana-ge/src/main/resources/models/dwarf1.ms3d");
+            renderer = CMS3DModelLoader.createModelRenderer("/home/rahmati/projects/piana-ge/src/main/resources/models/dwarf1.ms3d");
 //            modelLoader.initModel("classpath-/models/dwarf1.ms3d");
         } catch (IOException e) {
             e.printStackTrace();
@@ -99,6 +101,8 @@ public class T6RenderUnit extends BaseRenderUnit {
         });
 
         meshList.add(mesh);
+
+        meshList.addAll(renderer.DrawTexturedModel(1, 2, 3, shaderProgramId));
     }
 
     @Override

@@ -1,28 +1,42 @@
 package ir.piana.dev.gl.util;
 
-import java.io.ByteArrayInputStream;
+import ir.piana.dev.gl.toolkit.CMS3DModelLoader;
+import org.lwjgl.opengl.GL11;
+import org.lwjgl.stb.STBImage;
+import org.lwjgl.system.MemoryStack;
+
 import java.io.File;
-import java.io.InputStream;
-import java.io.Serializable;
-import java.net.URI;
 import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
-import java.nio.channels.Channel;
-import java.nio.channels.ReadableByteChannel;
 import java.util.HashMap;
-import java.util.Locale;
-
-import ir.piana.dev.gl.toolkit.CMS3DModelLoader;
-import org.apache.commons.io.FileUtils;
-import org.lwjgl.opengl.*;
-import org.lwjgl.stb.STBImage;
-import org.lwjgl.system.MemoryStack;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.lwjgl.opengl.GL11.*;
 
 public class Texture {
     private static HashMap<String, Integer> idMap = new HashMap<String, Integer>();
+    private static final String IMAGE_PATTERN = "([^\\s\\/\\:]+(\\.(jpg|jpeg|png|bmp)).*$)";
+    private static Pattern pattern = Pattern.compile(IMAGE_PATTERN);
+
+    public static int loadTextureForMs3d(String texture) {
+        Matcher matcher = pattern.matcher(texture);
+        String name = null;
+        if(matcher.find()) {
+            String group = matcher.group(0);
+            if (group.contains(".jpg")) {
+                name = group.substring(0, group.indexOf(".jpg") + 4);
+            } else if (group.contains(".png")) {
+                name = group.substring(0, group.indexOf(".png") + 4);
+            } else if (group.contains(".bmp")) {
+                name = group.substring(0, group.indexOf(".bmp") + 4);
+            } else if (group.contains(".jpeg")) {
+                name = group.substring(0, group.indexOf(".jpg") + 5);
+            }
+        }
+        return loadTexture("classpath-/models/" + name);
+    }
 
     public static int loadTexture(String texture) {
         int width;
